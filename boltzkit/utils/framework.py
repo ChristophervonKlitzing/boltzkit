@@ -19,6 +19,7 @@ if TYPE_CHECKING:
 
 def is_torch_tensor(x) -> bool:
     try:
+        global torch
         import torch
     except ImportError:
         return False
@@ -27,6 +28,7 @@ def is_torch_tensor(x) -> bool:
 
 def is_jax_array(x) -> bool:
     try:
+        global jax
         import jax
     except ImportError:
         return False
@@ -81,6 +83,7 @@ def to_numpy(x: "Array", source_framework: FrameworkName) -> np.ndarray:
     elif source_framework == "pytorch":
         return x.detach().cpu().numpy()
     elif source_framework == "jax":
+        global jax
         import jax
 
         return jax.device_get(x)
@@ -117,6 +120,7 @@ def from_numpy(
     elif target_framework == "pytorch":
         return torch.tensor(x, dtype=dtype, device=device)
     elif target_framework == "jax":
+        global jnp
         import jax.numpy as jnp
 
         return jnp.asarray(x)
@@ -151,13 +155,12 @@ def _create_pytorch_autograd_func(
     class Function(torch.autograd.Function):
         @staticmethod
         def forward(ctx, x: torch.Tensor):
-            print("forward")
             value, grad = value_and_grad_fn(x)
             ctx.save_for_backward(grad)
             # Return log_probs as torch tensor
 
             if include_grad:
-                return value, grad
+                return value, grad.detach()
             else:
                 return value
 
@@ -200,11 +203,13 @@ class FrameworkAgnosticFunction:
     def get_grad(self, x: "Array") -> "Array":
         if self._grad_fn is None:
             raise NotImplementedError("Gradients are not supported for this function")
-        return self._grad_fn(x)
+        grad = self._grad_fn(x)
+        if is_torch_tensor(grad):
+            # autograd through gradients are not supported
+            grad = grad.detach()
+        return grad
 
-    def get_value_and_grad(
-        self, x: "Array", pytorch_allow_autograd: bool = False
-    ) -> tuple["Array", "Array"]:
+    def get_value_and_grad(self, x: "Array") -> tuple["Array", "Array"]:
         if self._value_and_grad_fn is None:
             raise NotImplementedError("Gradients are not supported for this function")
 
@@ -212,9 +217,14 @@ class FrameworkAgnosticFunction:
             f = _create_pytorch_autograd_func(
                 self._value_and_grad_fn, include_grad=True
             )
-            return f.apply(x)
+            value, grad = f.apply(x)
         else:
-            return self._value_and_grad_fn(x)
+            value, grad = self._value_and_grad_fn(x)
+
+        if is_torch_tensor(grad):
+            # autograd through gradients are not supported
+            grad = grad.detach()
+        return value, grad
 
 
 def make_agnostic_simple(*, implementation: FrameworkName):
@@ -253,10 +263,14 @@ T = TypeVar("T")
 
 
 def try_jit_jax(f: T) -> T:
+    global jax
+    import jax
+
     try:
         return jax.jit(f)
     except Exception as e:
         warnings.warn(f"Failed to jit function ({repr(e)})")
+        return f
 
 
 def make_agnostic(
@@ -347,6 +361,13 @@ def make_agnostic(
     which would result in many individual calls to `value_fn` when using `jax.vmap(jax.grad(f))(batch)`.
     """
 
+    if implementation == "jax":
+        global jax
+        import jax
+    elif implementation == "pytorch":
+        global torch
+        import torch
+
     def decorator(
         value_fn: Callable[["Array"], "Array"],
         grad_fn=grad_fn,
@@ -359,8 +380,6 @@ def make_agnostic(
         wrapped_value_and_grad_fn = None
 
         if implementation == "jax":
-            import jax
-
             jax_batched_value_fn = jax.vmap(value_fn)
             jax_batched_value_fn = try_jit_jax(jax_batched_value_fn)
             wrapped_value_fn = wrap_simple(jax_batched_value_fn)

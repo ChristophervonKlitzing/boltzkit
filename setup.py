@@ -7,10 +7,14 @@ __version__ = "0.1"
 
 here = path.abspath(path.dirname(__file__))
 
-# Get the dependencies and installs:
-with open(path.join(here, "requirements.txt"), encoding="utf-8") as f:
-    all_reqs = f.read().split("\n")
-install_requires = [x.strip() for x in all_reqs]
+
+def parse_requirements(file_name: str):
+    # Get the dependencies and installs:
+    with open(path.join(here, file_name), encoding="utf-8") as f:
+        all_reqs = f.read().split("\n")
+    dependencies = [x.strip() for x in all_reqs]
+    return dependencies
+
 
 setup(
     name="boltzkit",
@@ -20,6 +24,6 @@ setup(
     keywords="",
     packages=find_packages(),
     include_package_data=True,
-    author=["Denis Blessing, Henrik Schopmans, Christopher von Klitzing"],
-    install_requires=install_requires,
+    author="Denis Blessing, Henrik Schopmans, Christopher von Klitzing",
+    install_requires=parse_requirements("requirements.txt"),
 )
