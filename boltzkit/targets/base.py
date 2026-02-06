@@ -113,7 +113,7 @@ class PyTorchTarget(BaseTarget):
     def __init__(self, dim):
         super().__init__(dim)
         self._wrapper = make_agnostic(
-            implementation="pytorch", value_fn=self._jax_log_prob
+            implementation="pytorch", value_fn=self._pytorch_log_prob
         )
 
     @abstractmethod

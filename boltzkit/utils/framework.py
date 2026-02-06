@@ -10,7 +10,7 @@ import numpy as np
 import warnings
 
 if TYPE_CHECKING:
-    # Try import modules for type-hinting
+    # Import modules for type-hinting (okay if not installed)
     import torch
     import jax
 
