@@ -337,8 +337,8 @@ def make_agnostic(
 
     Framework-specific caveats
     --------------------------
-    - **NumPy:** Automatic differentiation is not available. You should provide
-    `grad_fn`, `value_and_grad_fn`, or both if you need gradients.
+    - **NumPy:** Automatic differentiation is not available. The user should provide
+    `grad_fn`, `value_and_grad_fn`, or both if gradients are needed.
     - **JAX:** Functions are automatically JIT-compiled and vectorized when possible.
     They should therefore be provided in a **non-vectorized** form.
     - **PyTorch:** First-order automatic differentiation is supported. Gradients can
@@ -459,5 +459,5 @@ if __name__ == "__main__":
     val.sum().backward()
     print(x_torch.grad)
 
-    grad = foo_np.get_grad(y)
-    print(grad)
+    grad = foo_torch.get_grad(jax.numpy.asarray(y.detach().numpy()))
+    print(grad, type(grad))
