@@ -15,10 +15,10 @@ from boltzkit.utils.openmm import numpy_to_vec3_list, vec3_list_to_numpy
 
 import multiprocessing as mp
 
-
-KJ_MOL_TO_EV = 0.010364269574711572
-KJ_MOL_NM_TO_EV_A = 0.001036426957471157
-A_TO_NM = 0.1
+# Use of electronvolt instead of joule to decrease the effect of rounding errors.
+# The resulting units cancel out when computing the Boltzmann density (dividing by kB[eV/T] * temperature[K]).
+kB_in_eV_per_K = 8.617333262145177e-05  # Boltzmann constant in eV/K
+kJ_per_mol_to_eV = 0.010364269656262174  # converts KJ/mol -> eV
 
 
 @contextmanager
@@ -94,11 +94,20 @@ def evaluate_energy_single(
     include_forces: bool = True,
 ) -> np.ndarray:
     """
-    Evaluate energy for a set of atomic positions specified in nanometers.
+    Evaluate energy for a set of atomic positions specified in nanometers (nm).
 
+    :param sim: Description
+    :type sim: app.Simulation
     :param pos: Atomic positions as list of vectors or numpy array of shape (n_atoms, 3)
-    :type pos: list[mm.Vec3] | np.ndarray | mm.unit.Quantity
+    :type pos: list[mm.Vec3] | np.ndarray | unit.Quantity
+    :param include_energy: Whether to compute energy
+    :type include_energy: bool
+    :param include_forces: Whether to compute forces
+    :type include_forces: bool
+    :return: Return optional energy (in eV) and forces in (eV/nm)
+    :rtype: ndarray[_AnyShape, dtype[Any]]
     """
+
     if isinstance(pos, np.ndarray):
         pos = numpy_to_vec3_list(pos)
 
@@ -109,7 +118,7 @@ def evaluate_energy_single(
 
     if include_energy:
         energy = state.getPotentialEnergy().value_in_unit(unit.kilojoule_per_mole)
-        energy = energy * KJ_MOL_TO_EV
+        energy = energy * kJ_per_mol_to_eV
     else:
         energy = None
 
@@ -117,14 +126,9 @@ def evaluate_energy_single(
         force_unit = unit.kilojoule_per_mole / unit.nanometer
         forces = state.getForces().value_in_unit(force_unit)
         forces = vec3_list_to_numpy(forces)
-        forces = forces * KJ_MOL_NM_TO_EV_A
+        forces = forces * kJ_per_mol_to_eV
     else:
         forces = None
-
-    """
-    TODO: Think about additional unit conversion (KJ_MOL_TO_EV, KJ_MOL_NM_TO_EV_A) in CV diffusion paper
-    bgmol does not do that.
-    """
 
     return energy, forces
 
@@ -378,7 +382,7 @@ if __name__ == "__main__":
     import timeit
 
     energy, forces = energy_eval.evaluate_batch(np.stack([np_positions] * 4, 0))
-    print("energies:", energy, type(energy))
+    print("energies:", energy / (kB_in_eV_per_K * 300), type(energy))
     print("forces:", forces.shape if forces is not None else None, type(forces))
 
     n_times = 5
