@@ -3,6 +3,7 @@ from contextlib import contextmanager
 from functools import partial
 import math
 import os
+import signal
 import sys
 from typing import Literal
 import numpy as np
@@ -21,7 +22,7 @@ A_TO_NM = 0.1
 
 
 @contextmanager
-def silence_stderr():
+def _silence_stderr():
     old = sys.stderr
     sys.stderr = open(os.devnull, "w")
     try:
@@ -68,7 +69,7 @@ def _test_ABI_set_positions_compatibility(sim: app.Simulation):
     def set_positions_impl(sim: app.Simulation, pos: list[mm.Vec3]):
         sim.context.setPositions(pos)
 
-    with silence_stderr():
+    with _silence_stderr():
         set_positions_impl(sim, p_test)
 
     s: mm.State = sim.context.getState(getPositions=True)
@@ -130,7 +131,7 @@ def evaluate_energy_single(
 
 def get_openmm_platform(platform_name: Literal["CPU", "CUDA"] | None = None):
     def _create_cuda_platform():
-        platform = mm.Platform.getPlatformByName("CUDA")
+        platform: mm.Platform = mm.Platform.getPlatformByName("CUDA")
         platform.setPropertyDefaultValue("DeviceIndex", "0")
         platform.setPropertyDefaultValue("Precision", "mixed")
         return platform
@@ -267,6 +268,9 @@ _worker_energy_eval: SequentialEnergyEval | None = None
 
 
 def _init_worker(topology: app.Topology, system: mm.System, platform):
+    # Ignore SIGINTs (e.g., Ctrl+C) to currectly shutdown worker pool
+    signal.signal(signal.SIGINT, signal.SIG_IGN)
+
     global _worker_energy_eval
     _worker_energy_eval = SequentialEnergyEval(
         topology=topology, system=system, platform=platform
@@ -299,7 +303,8 @@ class ParallelEnergyEval:
             initializer=_init_worker,
             initargs=(topology, system, platform),
         )
-        atexit.register(self.pool.terminate)
+
+        atexit.register(self.pool.close)
 
     def evaluate_batch(
         self, x: np.ndarray, include_energy=True, include_forces=True, fragmentation=1
@@ -333,7 +338,14 @@ class ParallelEnergyEval:
         f = partial(
             _eval_worker, include_energy=include_energy, include_forces=include_forces
         )
-        results = self.pool.map(f, x_split)
+        try:
+            results = self.pool.map(f, x_split)
+        except KeyboardInterrupt:
+            print("Caught Ctrl+C, terminating process pool...")
+            self.pool.terminate()
+            self.pool.join()
+            print("terminated")
+            raise  # re-raise exception
 
         energies = [r[0] for r in results]
         forces = [r[1] for r in results]
@@ -369,13 +381,24 @@ if __name__ == "__main__":
     print("energies:", energy, type(energy))
     print("forces:", forces.shape if forces is not None else None, type(forces))
 
-    n_times = 10
+    n_times = 5
     batch = 1024
-    time = timeit.timeit(
-        lambda: energy_eval.evaluate_batch(np.random.randn(batch, 22, 3)),
+    parallel_time = timeit.timeit(
+        lambda: energy_eval.evaluate_batch(
+            np.random.randn(batch, 22, 3), fragmentation=1
+        ),
         number=n_times,
     )
-    print(f"{time / n_times:.3f}s for {batch} samples")
+    print(f"{parallel_time / n_times:.3f}s for {batch} samples")
+
+    seq_energy_eval = SequentialEnergyEval(pdb.topology, system)
+    seq_time = timeit.timeit(
+        lambda: seq_energy_eval.evaluate_batch(np.random.randn(batch, 22, 3)),
+        number=n_times,
+    )
+    print(f"{seq_time / n_times:.3f}s for {batch} samples")
     # Evaluation of 10^7 samples
     # ≈ 60min for sequential energy eval
     # ≈ 16min for parallel energy eval (with 6 worker threads on my laptop)
+
+    print(f"speedup: {seq_time / parallel_time:.2f}x")
