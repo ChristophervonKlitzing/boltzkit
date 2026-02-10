@@ -108,10 +108,16 @@ def compute_alpha_divergence_q(
     log_weights: np.ndarray, alpha: float, logZ: float | None = None
 ):
     """
-    Estimate the α-divergence D_alpha(p || q) using samples from q(x).
+    Estimate the Amari α-divergence D_alpha(p || q) using samples from q(x).
 
     This is an **importance-weighted** estimator:
-        D_alpha(p || q) = (E_{x~q}[(p(x)/q(x))^alpha] - 1) / (alpha*(alpha-1))
+    D_alpha(p || q) = (E_{x~q}[(p(x)/q(x))^alpha] - 1) / (alpha*(alpha-1))
+
+    This implementation is valid only for α ≠ 0, 1.
+    Using the mapping α = (1 + β) / 2, this function recovers the
+    Amari α-divergence for β ≠ -1, 1.
+    In the limits β → -1 and β → +1 (equivalently α → 0 and α → 1),
+    the divergence converges to KL(q || p) and KL(p || q), respectively.
 
     Parameters
     ----------
@@ -142,10 +148,16 @@ def compute_alpha_divergence_p(
     log_weights: np.ndarray, alpha: float, logZ: float | None = None
 ):
     """
-    Estimate the α-divergence D_alpha(p || q) using samples from p(x).
+    Estimate the Amari α-divergence D_alpha(p || q) using samples from p(x).
 
     This is an estimator with expectation over p:
-        D_alpha(p || q) = (E_{x~p}[(p(x)/q(x))^(alpha-1)] - 1) / (alpha*(alpha-1))
+    D_alpha(p || q) = (E_{x~p}[(p(x)/q(x))^(alpha-1)] - 1) / (alpha*(alpha-1))
+
+    This implementation is valid only for α ≠ 0, 1.
+    Using the mapping α = (1 + β) / 2, this function recovers the
+    Amari α-divergence for β ≠ -1, 1.
+    In the limits β → -1 and β → +1 (equivalently α → 0 and α → 1),
+    the divergence converges to KL(q || p) and KL(p || q), respectively.
 
     Parameters
     ----------
