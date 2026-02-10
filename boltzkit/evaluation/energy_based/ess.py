@@ -1,6 +1,8 @@
 import numpy as np
 from scipy.special import logsumexp as _logsumexp
 
+from boltzkit.utils.shape_utils import squeeze_last_dim
+
 
 def compute_reverse_ess(log_weights: np.ndarray) -> float:
     """
@@ -31,6 +33,7 @@ def compute_reverse_ess(log_weights: np.ndarray) -> float:
         Reverse ESS, normalized to the range (0, 1], representing the effective fraction of
         samples contributing to the estimate.
     """
+    log_weights = squeeze_last_dim(log_weights)
 
     logN = np.log(log_weights.shape[0])
 
@@ -71,6 +74,8 @@ def compute_forward_ess(log_weights: np.ndarray) -> float:
         Forward ESS, normalized to (0, 1], representing the effective fraction of
         target samples that are well-represented by the proposal distribution.
     """
+    log_weights = squeeze_last_dim(log_weights)
+
     logN = np.log(log_weights.shape[0])
     log_z_inv = _logsumexp(-log_weights, 0) - logN
     log_z_expectation_p_over_q = _logsumexp(log_weights, 0) - logN
