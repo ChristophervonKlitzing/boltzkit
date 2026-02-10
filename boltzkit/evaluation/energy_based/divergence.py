@@ -133,6 +133,7 @@ def compute_alpha_divergence_q(
     float
         Estimate of the α-divergence using samples from q(x).
     """
+    log_weights = squeeze_last_dim(log_weights)
     logN: float = np.log(log_weights.shape[0])
 
     if logZ is None:
@@ -174,7 +175,7 @@ def compute_alpha_divergence_p(
     float
         Estimate of the α-divergence using samples from p(x).
     """
-
+    log_weights = squeeze_last_dim(log_weights)
     logN: float = np.log(log_weights.shape[0])
 
     if logZ is None:
