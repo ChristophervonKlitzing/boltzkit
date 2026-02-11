@@ -1,5 +1,5 @@
 """
-Provides a collection of common energy-based metrics, meaning the proposal density can be evaluated.
+Provides a collection of common density-based metrics, meaning the proposal density can be evaluated.
 This includes metrics like:
 - reverse & forward ESS
 - ELBO & EUBO
