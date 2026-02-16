@@ -1,4 +1,6 @@
 import numpy as np
+
+
 from .base import NumPyTarget
 
 from boltzkit.utils.cached_repo import CachedRepo
@@ -11,6 +13,9 @@ from boltzkit.utils.molecular.energy_eval import (
 
 from openmm import app
 import openmm as mm
+
+from boltzkit.utils.molecular.z_matrix_factory import ZMatrixFactory
+import mdtraj as md
 
 
 class MolecularBoltzmann(NumPyTarget):
@@ -80,6 +85,38 @@ class MolecularBoltzmann(NumPyTarget):
         scores = self._forces_to_score(forces)
         return scores
 
+    def _get_cartesian_indices(self, z_matrix: list[tuple[int, int, int, int]]):
+        """
+        Auto-determines the atom indices, which are referenced but not present in the
+        """
+
+    def get_z_matrix(self, allow_autogen=True) -> list[tuple[int, int, int, int]]:
+        """
+        Generate or get a z-matrix for this system.
+
+        :param allow_autogen: Whether to automatically generate a z-matrix if none is specifed in the system config.
+        :type allow_autogen: bool
+        """
+        z_matrix: None | list[tuple[int, int, int, int]] = self._repo.config.get(
+            "z_matrix", None
+        )
+
+        if z_matrix is None and allow_autogen:
+            print("Create z-matrix using ZMatrixFactory")
+            mdtraj_topology = md.Topology.from_openmm(self.pdb.topology)
+            factory = ZMatrixFactory(mdtraj_topology)
+            np_z_matrix = factory.build_with_templates()[0]
+            z_matrix = np_z_matrix.tolist()
+
+        if z_matrix is None:
+            raise ValueError(
+                "System has no pre-specified z-matrix and `autogen` is set to False"
+            )
+
+        return z_matrix
+
+    def create_internal_coordinate_trafo(self): ...
+
     @property
     def spatial_dim(self) -> int:
         return self._spatial_dim
@@ -96,3 +133,5 @@ if __name__ == "__main__":
     target = MolecularBoltzmann("datasets/chrklitz99/test_system")
     log_probs = target.get_log_prob(np.random.randn(5, 22, 3))
     print(log_probs)
+    z_matrix = target.get_z_matrix()
+    print(z_matrix)

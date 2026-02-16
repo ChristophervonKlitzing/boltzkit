@@ -53,10 +53,7 @@ class CachedRepo:
         self._info_path = self.load_file("info.yaml")
 
         with open(self._info_path) as f:
-            try:
-                self._config: dict[str, Any] = yaml.safe_load(f)
-            except yaml.YAMLError as exc:
-                print(exc)
+            self._config: dict[str, Any] = yaml.safe_load(f)
 
         if not lazy_download:
             snapshot_download(

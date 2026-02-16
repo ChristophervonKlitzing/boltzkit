@@ -1,3 +1,36 @@
+"""
+============================================================================
+
+This file utilizes a modified version of the ZMatrixFactory from
+https://github.com/noegroup/bgmol.
+
+============================================================================
+
+MIT License
+
+Copyright (c) 2020 noegroup
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+============================================================================
+"""
+
 import os
 import warnings
 from copy import copy
@@ -6,29 +39,10 @@ import numpy as np
 import mdtraj as md
 import yaml
 
-# from pkg_resources import resource_filename
-
 from typing import Sequence
 
-
-def get_data_file(relative_path):
-    """Get the full path to one of the reference files.
-
-    Parameters
-    ----------
-    name : str
-        Name of the file to load (with respect to the repex folder).
-
-    """
-    fn = resource_filename("bgmol.systems", relative_path)
-
-    if not os.path.exists(fn):
-        raise ValueError(
-            "Sorry! %s does not exist. If you just added it, you'll have to re-install"
-            % fn
-        )
-
-    return fn
+_THIS_MODULE_DIR = os.path.dirname(__file__)
+_TEMPLATE_DIR = os.path.join(_THIS_MODULE_DIR, "z_matrix_templates")
 
 
 def find_rings(mdtraj_topology: md.Topology):
@@ -379,8 +393,6 @@ class ZMatrixFactory:
         One-dimensional array of cartesian atom indices.
     """
 
-    TEMPLATE_LOOKUP_DIR = "."  # get_data_file("../data/")
-
     @property
     def z_matrix(self):
         return np.array(self._z).astype(np.int64)
@@ -514,7 +526,11 @@ class ZMatrixFactory:
     # === template builder and helpers ===
 
     def build_with_templates(
-        self, *yaml_files, build_protein_backbone=True, subset="all"
+        self,
+        *yaml_files,
+        template_lookup_dir: str = _TEMPLATE_DIR,
+        build_protein_backbone=True,
+        subset="all",
     ):
         """Build ICs from template files.
 
@@ -522,6 +538,8 @@ class ZMatrixFactory:
         ----------
         *yaml_files : str
             filenames of any other template files; if non are passed, use the bundled "z_protein.yaml", "z_termini.yaml"
+        template_lookup_dir : str
+            Directory path to look up the templates
         build_protein_backbone : bool
             Whether to build the protein backbone first
         subset : str or sequence of int
@@ -536,10 +554,13 @@ class ZMatrixFactory:
         z_matrix : np.ndarray
         fixed_atoms : np.ndarray
         """
+
         if len(yaml_files) == 0:
             yaml_files = ["z_protein.yaml", "z_termini.yaml"]
         subset = self._select(subset)
-        templates = self._load_templates(*yaml_files)
+        templates = self._load_templates(
+            *yaml_files, template_lookup_dir=template_lookup_dir
+        )
 
         # build_backbone
         if build_protein_backbone:
@@ -591,15 +612,15 @@ class ZMatrixFactory:
             self.build_naive(subset)
         return self.z_matrix, self.fixed
 
-    def _load_template(self, yaml_file):
-        filename_in_pkg = os.path.join(self.TEMPLATE_LOOKUP_DIR, yaml_file)
+    def _load_template(self, yaml_file, template_lookup_dir: str):
+        filename_in_pkg = os.path.join(template_lookup_dir, yaml_file)
         if os.path.isfile(filename_in_pkg):
             if os.path.isfile(yaml_file) and os.path.normpath(
                 yaml_file
             ) != os.path.normpath(filename_in_pkg):
                 raise warnings.warn(
                     f"{yaml_file} exists locally and in the package templates. "
-                    f"Taking the built-in one from the bgmol package.",
+                    f"Taking the built-in one from the boltzkit package.",
                     UserWarning,
                 )
             yaml_file = filename_in_pkg
@@ -623,10 +644,10 @@ class ZMatrixFactory:
                 del templates["GENERAL"]
             return templates
 
-    def _load_templates(self, *yaml_files):
+    def _load_templates(self, *yaml_files, template_lookup_dir: str):
         templates = dict()
         for f in yaml_files:
-            template = self._load_template(f)
+            template = self._load_template(f, template_lookup_dir=template_lookup_dir)
             for key in template:
                 if key in templates:
                     warnings.warn(
