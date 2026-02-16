@@ -9,6 +9,26 @@ if TYPE_CHECKING:
     import torch
 
 
+# TODO: Also add:
+"""
+can_sample and sample (should use an rng seeded in the constructor)
+logZ -> None | float
+
+!!! Not sure about whether the following should even be part of the class:
+
+__init__ should take arguments to load the datasets: subset of dict {"validation": ..., "test": ..., "train": ...}
+get/load_raw_dataset(split="validation") -> None | Dataset # or "test" or "train"
+Dataset is either only holding samples or also evals (only if already available in the dataset!).
+
+get_evaluation_data(n_samples: int, split="validation", fallback="sample", include_log_prob: bool = True, include_score: bool = True) -> Data
+split: "validation" or "test"
+fallback: "error" (default), "sample", "train", "valdiation", "test", "sample_warn" 
+Data object should provide sample function and other utility and be easily convertible into torch dataloader etc,
+but it should also provide functionality to sample like from a torch dataloader.
+get_evaluation_data should fail if the dataset is not loaded and sample is not an option.
+"""
+
+
 class BaseTarget(ABC):
     def __init__(
         self,
@@ -60,6 +80,16 @@ class BaseTarget(ABC):
     @abstractmethod
     def _get_wrapper(self) -> FrameworkAgnosticFunction:
         raise NotImplementedError
+
+    @abstractmethod
+    def can_sample(self) -> bool:
+        raise NotImplementedError
+
+    def sample(self, n_samples: int) -> np.ndarray:
+        raise NotImplementedError
+
+    def get_logZ(self) -> float | None:
+        return None
 
 
 class NumPyTarget(BaseTarget):

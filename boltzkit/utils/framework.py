@@ -47,7 +47,7 @@ def detect_framework(x: "Array") -> FrameworkName:
         return "jax"
     else:
         raise ValueError(
-            f"Framework could not be detected for input of type '{type(x).__name__}'"
+            f"Framework could not be detected or imported for input of type '{type(x).__name__}'."
         )
 
 

@@ -11,14 +11,30 @@ import openmm as mm
 from openmm import unit, app
 import atexit
 
-from boltzkit.utils.openmm import numpy_to_vec3_list, vec3_list_to_numpy
 
 import multiprocessing as mp
+
 
 # Use of electronvolt instead of joule to decrease the effect of rounding errors.
 # The resulting units cancel out when computing the Boltzmann density (dividing by kB[eV/T] * temperature[K]).
 kB_in_eV_per_K = 8.617333262145177e-05  # Boltzmann constant in eV/K
 kJ_per_mol_to_eV = 0.010364269656262174  # converts KJ/mol -> eV
+
+
+def numpy_to_vec3_list(pos: np.ndarray) -> list[mm.Vec3]:
+    """
+    Convert numpy position vector in nanometers into list openmm Vec3 entries.
+
+    :param pos: Position array of shape (n, 3)
+    :type pos: np.ndarray
+    :return: Single molecule atom positions
+    :rtype: list[mm.Vec3]
+    """
+    return [mm.Vec3(*pos[i].tolist()) for i in range(pos.shape[0])]
+
+
+def vec3_list_to_numpy(pos: list[mm.Vec3]) -> np.ndarray:
+    return np.asarray([[p.x, p.y, p.z] for p in pos])
 
 
 @contextmanager
@@ -66,7 +82,7 @@ def _test_ABI_set_positions_compatibility(sim: app.Simulation):
     test_offset = np.arange(p_old.size).reshape(p_old.shape)
     p_test = p_old.copy() + test_offset
 
-    def set_positions_impl(sim: app.Simulation, pos: list[mm.Vec3]):
+    def set_positions_impl(sim: app.Simulation, pos: np.ndarray):
         sim.context.setPositions(pos)
 
     with _silence_stderr():
@@ -107,9 +123,6 @@ def evaluate_energy_single(
     :return: Return optional energy (in eV) and forces in (eV/nm)
     :rtype: ndarray[_AnyShape, dtype[Any]]
     """
-
-    if isinstance(pos, np.ndarray):
-        pos = numpy_to_vec3_list(pos)
 
     sim.context.setPositions(pos)
     state: mm.State = sim.context.getState(
@@ -376,33 +389,67 @@ if __name__ == "__main__":
     energy_eval = ParallelEnergyEval(pdb.topology, system)
 
     np_positions = vec3_list_to_numpy(pdb.positions)
-    # np_positions[0, 0] += 0.0
-    # energy, forces = energy_eval.get_energy_and_force(np_positions)
-
-    import timeit
 
     energy, forces = energy_eval.evaluate_batch(np.stack([np_positions] * 4, 0))
     print("energies:", energy / (kB_in_eV_per_K * 300), type(energy))
     print("forces:", forces.shape if forces is not None else None, type(forces))
 
-    n_times = 5
-    batch = 1024
-    parallel_time = timeit.timeit(
-        lambda: energy_eval.evaluate_batch(
-            np.random.randn(batch, 22, 3), fragmentation=1
-        ),
-        number=n_times,
-    )
-    print(f"{parallel_time / n_times:.3f}s for {batch} samples")
+    # TODO: Compare with bgmol implementation and CV diffusion repo implementation
+    # TODO: Test speed with different batch sizes on more threads
 
-    seq_energy_eval = SequentialEnergyEval(pdb.topology, system)
-    seq_time = timeit.timeit(
-        lambda: seq_energy_eval.evaluate_batch(np.random.randn(batch, 22, 3)),
-        number=n_times,
-    )
-    print(f"{seq_time / n_times:.3f}s for {batch} samples")
-    # Evaluation of 10^7 samples
-    # ≈ 60min for sequential energy eval
-    # ≈ 16min for parallel energy eval (with 6 worker threads on my laptop)
+    check_force_scale = False
+    if check_force_scale:
+        # numerically check if force is scaled correctly
+        shift = 0.000001 * np.random.randn(22, 3)
+        pos_shifted = np_positions + shift
+        energy, forces = energy_eval.evaluate_batch(np.expand_dims(np_positions, 0))
+        energy_shifted, _ = energy_eval.evaluate_batch(np.expand_dims(pos_shifted, 0))
+        v1 = energy_shifted - energy
+        v2 = -np.dot(forces.flatten(), shift.flatten())
+        print("Result should be 1:", v1 / v2)
 
-    print(f"speedup: {seq_time / parallel_time:.2f}x")
+    measure_time = True
+    if measure_time:
+        import timeit
+
+        np.infty = np.inf
+        from bgflow.distribution.energy.openmm import MultiContext
+
+        n_times = 5
+        batch = 16368
+
+        seq_energy_eval = SequentialEnergyEval(pdb.topology, system)
+        seq_time = timeit.timeit(
+            lambda: seq_energy_eval.evaluate_batch(np.random.randn(batch, 22, 3)),
+            number=n_times,
+        )
+
+        # Evaluation of 10^7 samples
+        # ≈ 60min for sequential energy eval
+        # ≈ 16min for parallel energy eval (with 6 worker threads on my laptop)
+
+        integrator = mm.LangevinIntegrator(
+            300 * unit.kelvin, 1 / unit.picosecond, 0.001 * unit.femtosecond
+        )
+        c = MultiContext(energy_eval.n_workers, system, integrator, "CPU")
+        c.evaluate(np.random.randn(batch, 22, 3))
+
+        # with _silence_stderr():
+        bgflow_time = timeit.timeit(
+            lambda: c.evaluate(np.random.randn(batch, 22, 3)),
+            number=n_times,
+        )
+
+        parallel_time = timeit.timeit(
+            lambda: energy_eval.evaluate_batch(
+                np.random.randn(batch, 22, 3), fragmentation=batch
+            ),
+            number=n_times,
+        )
+
+        print(f"parallel: {parallel_time / n_times:.3f}s for {batch} samples")
+        print(f"sequential: {seq_time / n_times:.3f}s for {batch} samples")
+        print(f"bgflow: {bgflow_time / n_times:.3f}s for {batch} samples")
+        # print(f"parallel speedup: {seq_time / parallel_time:.2f}x")
+        # print(f"bgflow speedup: {seq_time / bgflow_time:.2f}x")
+        c.terminate()
