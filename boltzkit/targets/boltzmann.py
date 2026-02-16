@@ -50,27 +50,34 @@ class MolecularBoltzmann(NumPyTarget):
         else:
             raise TypeError
 
-    def _normalize_to_temp(
+    def _energy_to_log_prob(
         self, energy: np.ndarray, temperature: float | None = None
     ) -> np.ndarray:
         T = temperature if temperature is not None else self.temperature
-        log_probs = energy / (kB_in_eV_per_K * T)
+        log_probs = -energy / (kB_in_eV_per_K * T)
         return log_probs
+
+    def _forces_to_score(
+        self, forces: np.ndarray, temperature: float | None = None
+    ) -> np.ndarray:
+        T = temperature if temperature is not None else self.temperature
+        score = forces / (kB_in_eV_per_K * T)
+        return score
 
     def _numpy_log_prob_and_score(self, x):
         energy, forces = self._energy_eval.evaluate_batch(x)
-        log_probs = self._normalize_to_temp(energy)
-        scores = self._normalize_to_temp(forces)
+        log_probs = self._energy_to_log_prob(energy)
+        scores = self._forces_to_score(forces)
         return log_probs, scores
 
     def _numpy_log_prob(self, x):
         energy, _ = self._energy_eval.evaluate_batch(x, include_forces=False)
-        log_probs = self._normalize_to_temp(energy)
+        log_probs = self._energy_to_log_prob(energy)
         return log_probs
 
     def _numpy_score(self, x):
         _, forces = self._energy_eval.evaluate_batch(x, include_energy=False)
-        scores = self._normalize_to_temp(forces)
+        scores = self._forces_to_score(forces)
         return scores
 
     @property
