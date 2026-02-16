@@ -1,5 +1,7 @@
 import numpy as np
 
+from boltzkit.utils.molecular.conversion import vec3_list_to_numpy
+
 
 from .base import NumPyTarget
 
@@ -13,6 +15,7 @@ from boltzkit.utils.molecular.energy_eval import (
 
 from openmm import app
 import openmm as mm
+from openmm import unit
 
 from boltzkit.utils.molecular.z_matrix_factory import ZMatrixFactory
 import mdtraj as md
@@ -29,7 +32,7 @@ class MolecularBoltzmann(NumPyTarget):
         self._repo = CachedRepo(path, **kwargs)
         self._init_openmm()
 
-        self.temperature = self._repo.config["temperature"]
+        self.temperature = self._repo.config.get("temperature", 300.0)
         self._spatial_dim = 3
         self._n_nodes: int = self.system.getNumParticles()
         dim = self.spatial_dim * self.n_atoms
@@ -37,10 +40,12 @@ class MolecularBoltzmann(NumPyTarget):
 
         self._init_energy_eval(n_workers)
 
+        self._pos_min_energy_cache = None
+
     def _init_openmm(self):
         pdb_file = self._repo.config["pdb_file"]
         pdb_file_path = self._repo.load_file(pdb_file)
-        forcefield = self._repo.config["forcefield"]
+        forcefield = self._repo.config.get("forcefield", "amber14-all.xml")
         system_args = self._repo.config.get("system_args", {})
 
         self.pdb = app.PDBFile(pdb_file_path.absolute().as_posix())
@@ -115,7 +120,45 @@ class MolecularBoltzmann(NumPyTarget):
 
         return z_matrix
 
-    def create_internal_coordinate_trafo(self): ...
+    def _compute_position_min_energy(self):
+        integrator = mm.VerletIntegrator(1.0 * unit.femtoseconds)
+        simulation = app.Simulation(self.pdb.topology, self.system, integrator)
+        simulation.context.setPositions(self.pdb.positions)
+
+        # optimization is deterministic
+        simulation.minimizeEnergy()
+        state: mm.State = simulation.context.getState(getPositions=True)
+        minimized_positions = state.getPositions()
+        minimized_positions = vec3_list_to_numpy(minimized_positions)
+        return minimized_positions.reshape((self.dim,))
+
+    def get_position_min_energy(self) -> np.ndarray:
+        if self._pos_min_energy_cache is not None:
+            return self._pos_min_energy_cache
+
+        remote_path = self._repo.config.get("position_min_energy", None)
+        if remote_path is not None:
+            local_path = self._repo.load_file(remote_path)
+            pos_min_energy: np.ndarray = np.load(local_path)
+            self._pos_min_energy_cache = pos_min_energy.reshape((self.dim,))
+            return self._pos_min_energy_cache
+
+        import warnings
+
+        warnings.warn(
+            "Could not find minimum energy position and use automatically determined position instead"
+        )
+        # Position min energy not specifed -> determine automatically
+        pos_min_energy = self._compute_position_min_energy()
+        self._pos_min_energy_cache = pos_min_energy
+        return self._pos_min_energy_cache
+
+    def create_internal_coordinate_trafo(self):
+        self.coordinate_trafo_openmm = bg.GlobalInternalCoordinateTransformation(
+            z_matrix=z_matrix,
+            enforce_boundaries=True,
+            normalize_angles=True,
+        )
 
     @property
     def spatial_dim(self) -> int:
@@ -135,3 +178,6 @@ if __name__ == "__main__":
     print(log_probs)
     z_matrix = target.get_z_matrix()
     print(z_matrix)
+
+    pos_min_energy = target.get_position_min_energy()
+    print(pos_min_energy.shape)

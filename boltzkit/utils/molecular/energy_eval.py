@@ -10,7 +10,7 @@ import numpy as np
 import openmm as mm
 from openmm import unit, app
 import atexit
-
+from .conversion import vec3_list_to_numpy
 
 import multiprocessing as mp
 
@@ -19,22 +19,6 @@ import multiprocessing as mp
 # The resulting units cancel out when computing the Boltzmann density (dividing by kB[eV/T] * temperature[K]).
 kB_in_eV_per_K = 8.617333262145177e-05  # Boltzmann constant in eV/K
 kJ_per_mol_to_eV = 0.010364269656262174  # converts KJ/mol -> eV
-
-
-def numpy_to_vec3_list(pos: np.ndarray) -> list[mm.Vec3]:
-    """
-    Convert numpy position vector in nanometers into list openmm Vec3 entries.
-
-    :param pos: Position array of shape (n, 3)
-    :type pos: np.ndarray
-    :return: Single molecule atom positions
-    :rtype: list[mm.Vec3]
-    """
-    return [mm.Vec3(*pos[i].tolist()) for i in range(pos.shape[0])]
-
-
-def vec3_list_to_numpy(pos: list[mm.Vec3]) -> np.ndarray:
-    return np.asarray([[p.x, p.y, p.z] for p in pos])
 
 
 @contextmanager
