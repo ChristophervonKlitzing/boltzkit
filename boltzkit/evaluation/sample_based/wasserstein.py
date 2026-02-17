@@ -80,7 +80,7 @@ def _torus_wasserstein(angles0: np.ndarray, angles1: np.ndarray) -> float:
     return float(np.sqrt(dist_squared).item())
 
 
-def compute_torus_wasserstein(
+def compute_torus_wasserstein_2(
     ground_truth_cart: np.ndarray,
     model_samples_cart: np.ndarray,
     topology: md.Topology | app.Topology,
@@ -113,11 +113,11 @@ def compute_torus_wasserstein(
     - The joint angular distribution is treated as living on a torus.
     - Uniform weights are assumed for both ensembles.
     """
-    batch = ground_truth_cart.shape[0]
-    n_atoms = topology.getNumAtoms()
 
-    ground_truth_cart = ground_truth_cart.reshape((batch, n_atoms, -1))
-    model_samples_cart = model_samples_cart.reshape((batch, n_atoms, -1))
+    if len(ground_truth_cart.shape) == 2:
+        batch = ground_truth_cart.shape[0]
+        ground_truth_cart = ground_truth_cart.reshape((batch, -1, 3))
+        model_samples_cart = model_samples_cart.reshape((batch, -1, 3))
 
     if isinstance(topology, app.Topology):
         topology = md.Topology.from_openmm(topology)
@@ -132,6 +132,95 @@ def compute_torus_wasserstein(
     return t_wasserstein_2
 
 
+def compute_euclidean_wasserstein_1_2(
+    X1: np.ndarray,
+    X2: np.ndarray,
+    weights1: np.ndarray | None = None,
+    num_iter_max: int = int(1e9),
+    include_w1: bool = True,
+    include_w2: bool = True,
+):
+    """
+    Compute empirical Wasserstein-1 (W1) and Wasserstein-2 (W2) distances
+    between two point clouds using exact optimal transport.
+
+    Parameters
+    ----------
+    X1 : np.ndarray of shape (N, d)
+        First point cloud with N samples in d dimensions.
+    X2 : np.ndarray of shape (M, d)
+        Second point cloud with M samples in d dimensions.
+    weights1 : np.ndarray of shape (N,), optional
+        Non-negative weights for samples in `X1`. If None, uniform
+        weights are used. The second point cloud always uses uniform weights.
+    num_iter_max : int, default=1e6
+        Maximum number of iterations for the optimal transport solver.
+    include_w1 : bool, default=True
+        If True, compute and return Wasserstein-1 distance.
+    include_w2 : bool, default=True
+        If True, compute and return Wasserstein-2 distance.
+
+    Returns
+    -------
+    W1 : float or None
+        Wasserstein-1 distance using Euclidean ground cost.
+        Returns None if `include_w1=False`.
+    W2 : float or None
+        Wasserstein-2 distance using squared Euclidean ground cost.
+        Returns None if `include_w2=False`.
+
+    Notes
+    -----
+    - Exact optimal transport is computed using `ot.emd2`.
+    - W1 is computed as:
+
+          W1 = emd2(a, b, ||x - y||)
+
+    - W2 is computed as:
+
+          W2 = sqrt(emd2(a, b, ||x - y||^2))
+
+    - Computational complexity is O(NM) in memory and
+      typically super-cubic in time for exact OT.
+    """
+    if X1.ndim != 2 or X2.ndim != 2:
+        raise ValueError("X1 and X2 must be 2D arrays of shape (n_samples, dim).")
+    if X1.shape[1] != X2.shape[1]:
+        raise ValueError("Point clouds must have the same dimensionality.")
+
+    N, M = X1.shape[0], X2.shape[0]
+
+    # probability weights
+    if weights1 is None:
+        a = np.ones(N) / N
+    else:
+        a = weights1.flatten()
+        a = a / np.sum(a)
+
+    b = np.ones(M) / M
+
+    # cost matrix: pairwise Euclidean distances
+    Mmat = pot.dist(X1, X2, metric="euclidean")  # shape (N, M)
+
+    if include_w2:
+        # ---- Wasserstein-2 ----
+        # cost = ||x - y||^2
+        W2 = np.sqrt(pot.emd2(a, b, Mmat**2, numItermax=num_iter_max))
+        W2 = float(W2.item())
+    else:
+        W2 = None
+
+    if include_w1:
+        # ---- Wasserstein-1 ----
+        # cost = ||x - y||
+        W1 = pot.emd2(a, b, Mmat, numItermax=num_iter_max)
+        W1 = float(W1)
+    else:
+        W1 = None
+
+    return W1, W2
+
+
 if __name__ == "__main__":
     from boltzkit.targets.boltzmann import MolecularBoltzmann
 
@@ -140,5 +229,8 @@ if __name__ == "__main__":
 
     gt_samples = np.random.randn(1_000, 66)
     model_samples = np.random.randn(1_000, 66)
-    T_W2 = compute_torus_wasserstein(gt_samples, model_samples, topology)
+    T_W2 = compute_torus_wasserstein_2(gt_samples, model_samples, topology)
     print(T_W2)
+
+    W1, W2 = compute_euclidean_wasserstein_1_2(model_samples, gt_samples)
+    print(W1, W2)
