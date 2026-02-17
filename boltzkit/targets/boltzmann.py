@@ -32,61 +32,96 @@ class MolecularBoltzmann(NumPyTarget):
         self._repo = CachedRepo(path, **kwargs)
         self._init_openmm()
 
-        self.temperature = self._repo.config.get("temperature", 300.0)
+        self._temperature = self._repo.config.get("temperature", 300.0)
         self._spatial_dim = 3
-        self._n_nodes: int = self.system.getNumParticles()
+        self._n_nodes: int = self._system.getNumParticles()
         dim = self.spatial_dim * self.n_atoms
         super().__init__(dim)
 
-        self._init_energy_eval(n_workers)
+        self._n_workers = n_workers
+        self._energy_eval = None
 
         self._pos_min_energy_cache = None
 
     def _init_openmm(self):
-        pdb_file = self._repo.config["pdb_file"]
+        pdb_key = "pdb_file"
+        pdb_file = self._repo.config.get(pdb_key, None)
+        if pdb_file is None:
+            # automatic search for pdb file (there must exist exactly one for automatic search)
+            pdb_file_list = self._repo.find_file(r".*\.pdb$")
+            if len(pdb_file_list) != 1:
+                raise ValueError(
+                    f"Expected exactly one .pdb file in the repository, "
+                    f"but found {len(pdb_file_list)}. "
+                    f"Please specify the main PDB file explicitly in the config "
+                    f"using '{pdb_key}'."
+                )
+            pdb_file = pdb_file_list[0]
+            print(
+                f"Key '{pdb_key}' not specified. Use automatically detected .pdb file '{pdb_file}'."
+            )
+
         pdb_file_path = self._repo.load_file(pdb_file)
         forcefield = self._repo.config.get("forcefield", "amber14-all.xml")
         system_args = self._repo.config.get("system_args", {})
 
-        self.pdb = app.PDBFile(pdb_file_path.absolute().as_posix())
-        self.ff = app.ForceField(forcefield)
-        self.system: mm.System = self.ff.createSystem(self.pdb.topology, **system_args)
+        # Create system
+        self._pdb = app.PDBFile(pdb_file_path.absolute().as_posix())
+        self._forcefield = app.ForceField(forcefield)
+        self._system: mm.System = self._forcefield.createSystem(
+            self._pdb.topology, **system_args
+        )
+
+    def get_openmm_topology(self):
+        return self._pdb.topology
+
+    def get_openmm_system(self):
+        return self._system
+
+    def get_mdtraj_topology(self):
+        return md.Topology.from_openmm(self.get_openmm_topology())
 
     def _init_energy_eval(self, n_workers: int | None):
         if n_workers is None:
-            self._energy_eval = SequentialEnergyEval(self.pdb.topology, self.system)
+            self._energy_eval = SequentialEnergyEval(self._pdb.topology, self._system)
         elif isinstance(n_workers, int):
-            self._energy_eval = ParallelEnergyEval(self.pdb.topology, self.system)
+            self._energy_eval = ParallelEnergyEval(self._pdb.topology, self._system)
         else:
             raise TypeError
+
+    @property
+    def energy_eval(self):
+        if self._energy_eval is None:
+            self._init_energy_eval(self._n_workers)
+        return self._energy_eval
 
     def _energy_to_log_prob(
         self, energy: np.ndarray, temperature: float | None = None
     ) -> np.ndarray:
-        T = temperature if temperature is not None else self.temperature
+        T = temperature if temperature is not None else self._temperature
         log_probs = -energy / (kB_in_eV_per_K * T)
         return log_probs
 
     def _forces_to_score(
         self, forces: np.ndarray, temperature: float | None = None
     ) -> np.ndarray:
-        T = temperature if temperature is not None else self.temperature
+        T = temperature if temperature is not None else self._temperature
         score = forces / (kB_in_eV_per_K * T)
         return score
 
     def _numpy_log_prob_and_score(self, x):
-        energy, forces = self._energy_eval.evaluate_batch(x)
+        energy, forces = self.energy_eval.evaluate_batch(x)
         log_probs = self._energy_to_log_prob(energy)
         scores = self._forces_to_score(forces)
         return log_probs, scores
 
     def _numpy_log_prob(self, x):
-        energy, _ = self._energy_eval.evaluate_batch(x, include_forces=False)
+        energy, _ = self.energy_eval.evaluate_batch(x, include_forces=False)
         log_probs = self._energy_to_log_prob(energy)
         return log_probs
 
     def _numpy_score(self, x):
-        _, forces = self._energy_eval.evaluate_batch(x, include_energy=False)
+        _, forces = self.energy_eval.evaluate_batch(x, include_energy=False)
         scores = self._forces_to_score(forces)
         return scores
 
@@ -108,7 +143,7 @@ class MolecularBoltzmann(NumPyTarget):
 
         if z_matrix is None and allow_autogen:
             print("Create z-matrix using ZMatrixFactory")
-            mdtraj_topology = md.Topology.from_openmm(self.pdb.topology)
+            mdtraj_topology = md.Topology.from_openmm(self._pdb.topology)
             factory = ZMatrixFactory(mdtraj_topology)
             np_z_matrix = factory.build_with_templates()[0]
             z_matrix = np_z_matrix.tolist()
@@ -122,8 +157,8 @@ class MolecularBoltzmann(NumPyTarget):
 
     def _compute_position_min_energy(self):
         integrator = mm.VerletIntegrator(1.0 * unit.femtoseconds)
-        simulation = app.Simulation(self.pdb.topology, self.system, integrator)
-        simulation.context.setPositions(self.pdb.positions)
+        simulation = app.Simulation(self._pdb.topology, self._system, integrator)
+        simulation.context.setPositions(self._pdb.positions)
 
         # optimization is deterministic
         simulation.minimizeEnergy()
@@ -172,12 +207,41 @@ class MolecularBoltzmann(NumPyTarget):
         return False
 
 
+def print_z_matrix(z_matrix: list[tuple[int, int, int, int]]):
+    if not z_matrix:
+        print("--- z-matrix ---")
+        print("(empty)")
+        print("----------------")
+        return
+
+    # Transpose to compute column widths
+    columns = list(zip(*z_matrix))
+    col_widths = [max(len(str(v)) for v in col) for col in columns]
+
+    # Format rows first so we know total width
+    formatted_rows = [
+        "  ".join(f"{value:>{col_widths[i]}}" for i, value in enumerate(row))
+        for row in z_matrix
+    ]
+
+    row_width = max(len(row) for row in formatted_rows)
+
+    title = "--- z-matrix ---"
+    if len(title) < row_width:
+        title = title.center(row_width, "-")
+
+    print(title)
+    for row in formatted_rows:
+        print(row)
+    print("-" * row_width)
+
+
 if __name__ == "__main__":
     target = MolecularBoltzmann("datasets/chrklitz99/test_system")
-    log_probs = target.get_log_prob(np.random.randn(5, 22, 3))
-    print(log_probs)
+    # log_probs = target.get_log_prob(np.random.randn(5, 22, 3))
+    # print(log_probs)
     z_matrix = target.get_z_matrix()
-    print(z_matrix)
+    print_z_matrix(z_matrix)
 
     pos_min_energy = target.get_position_min_energy()
     print(pos_min_energy.shape)

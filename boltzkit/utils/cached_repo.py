@@ -1,4 +1,5 @@
 from pathlib import Path
+import re
 from typing import Any
 from huggingface_hub import HfFileSystem, hf_hub_download, snapshot_download
 import yaml
@@ -71,6 +72,19 @@ class CachedRepo:
         """Return all files in the HF repo."""
         return [strip_repo_prefix(p, self._path) for p in self._fs.find(self._path)]
 
+    def find_file(self, regex: str) -> list[str]:
+        """
+        Return all remote files matching the given regex pattern.
+
+        Args:
+            regex (str): Regular expression to match against file paths.
+
+        Returns:
+            List[str]: List of matching file paths (repo-relative).
+        """
+        pattern = re.compile(regex)
+        return [path for path in self.list_remote_files() if pattern.search(path)]
+
     def load_file_old(self, relative_filepath: str):
         """
         Downloads a file from HF repo if not already cached.
@@ -117,3 +131,5 @@ if __name__ == "__main__":
     print("Remote files:")
     print(sys_info.list_remote_files())
     print(sys_info.config)
+
+    print(sys_info.find_file(".*\.pdb"))

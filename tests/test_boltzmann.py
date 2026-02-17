@@ -11,7 +11,7 @@ class TestBoltzmann(unittest.TestCase):
         self.bm = bm
 
     def test_log_probs_match_forces(self):
-        np_positions = self.bm.pdb.getPositions(asNumpy=True)
+        np_positions = self.bm._pdb.getPositions(asNumpy=True)
         np_positions = np.expand_dims(np_positions, 0)
 
         # rng = np.random.default_rng(seed=0)
