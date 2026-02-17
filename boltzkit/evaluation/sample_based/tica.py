@@ -146,10 +146,31 @@ def plot_tica(
     # counts, bin_edges_x, bin_edges_y = np.histogram2d(
     #     tica_projections_gt[:, 0], tica_projections_gt[:, 1]
     # )
-    _, (ax0, ax1) = plt.subplots(1, 2)
-    ax0.hist2d(tica_projections_gt[:, 0], tica_projections_gt[:, 1], bins=100)
-    ax1.hist2d(tica_projections_model[:, 0], tica_projections_model[:, 1], bins=100)
+    # _, (ax0, ax1) = plt.subplots(1, 2)
+    # ax0.hist2d(tica_projections_gt[:, 0], tica_projections_gt[:, 1], bins=100)
+    # ax1.hist2d(tica_projections_model[:, 0], tica_projections_model[:, 1], bins=100)
     # plt.hist(tica_projections_gt[:, 0], tica_projections_gt[:, 1], density=True)
+    # plt.show()
+    from .plot_free_energy import plot_2D_free_energy
+
+    plot_2D_free_energy(
+        tica_projections_gt[..., 0],
+        tica_projections_gt[..., 1],
+        ax=None,
+        cmap=None,  # Use default
+        nbins=100,
+        vmax=12.5,
+        range=[
+            [
+                np.min(tica_projections_gt[..., 0]).item(),
+                np.max(tica_projections_gt[..., 0]).item(),
+            ],
+            [
+                np.min(tica_projections_gt[..., 1]).item(),
+                np.max(tica_projections_gt[..., 1]).item(),
+            ],
+        ],
+    )
     plt.show()
 
 
@@ -159,20 +180,22 @@ if __name__ == "__main__":
     # TODO: instead of loading a TICA model using pickle, its parameters should be loaded.
     # pickle can fail if the deeptime package changes substantially between versions.
 
-    with open("tica.pkl", "rb") as f:
-        tica_model: dt.decomposition.TransferOperatorModel = pickle.load(f)
-    print(tica_model.get_params())
     from boltzkit.targets.boltzmann import MolecularBoltzmann
 
     bm = MolecularBoltzmann("datasets/chrklitz99/test_system")
+    tica_model = bm.get_tica_model()
+
     topology = bm.get_mdtraj_topology()
 
-    model_samples = np.random.randn(1000, 66)
-    gt_samples = np.random.randn(1000, 66)
+    model_samples = np.random.randn(10_000, 66)
+
+    gt_samples_path = bm._repo.load_file("300K_val.npy")
+    gt_samples = np.load(gt_samples_path)
+    print(gt_samples.shape)
 
     # print(tica_model, type(tica_model))
     plot_tica(
-        gt_samples,
+        gt_samples[:10_000],
         model_samples,
         topology,
         tica_model,

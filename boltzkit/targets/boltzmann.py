@@ -20,6 +20,9 @@ from openmm import unit
 from boltzkit.utils.molecular.z_matrix_factory import ZMatrixFactory
 import mdtraj as md
 
+import deeptime as dt
+import pickle
+
 
 class MolecularBoltzmann(NumPyTarget):
     def __init__(
@@ -125,11 +128,6 @@ class MolecularBoltzmann(NumPyTarget):
         scores = self._forces_to_score(forces)
         return scores
 
-    def _get_cartesian_indices(self, z_matrix: list[tuple[int, int, int, int]]):
-        """
-        Auto-determines the atom indices, which are referenced but not present in the
-        """
-
     def get_z_matrix(self, allow_autogen=True) -> list[tuple[int, int, int, int]]:
         """
         Generate or get a z-matrix for this system.
@@ -187,6 +185,26 @@ class MolecularBoltzmann(NumPyTarget):
         pos_min_energy = self._compute_position_min_energy()
         self._pos_min_energy_cache = pos_min_energy
         return self._pos_min_energy_cache
+
+    def get_tica_model(self):
+        tica_key = "tica"
+        tica_remote_path = self._repo.config.get(tica_key, None)
+        if tica_remote_path is None:
+            tica_file_list = self._repo.find_file(r"^tica.pkl$")
+            if len(tica_file_list) != 1:
+                raise ValueError(
+                    f"Expected exactly one tica file in the repository, "
+                    f"but found {len(tica_file_list)}. "
+                    f"Please specify the main tica file explicitly in the config "
+                    f"using '{tica_key}'."
+                )
+            tica_remote_path = tica_file_list[0]
+
+        tica_local_path = self._repo.load_file(tica_remote_path)
+        with open(tica_local_path, "rb") as f:
+            tica_model: dt.decomposition.TransferOperatorModel = pickle.load(f)
+
+        return tica_model
 
     def create_internal_coordinate_trafo(self):
         self.coordinate_trafo_openmm = bg.GlobalInternalCoordinateTransformation(
