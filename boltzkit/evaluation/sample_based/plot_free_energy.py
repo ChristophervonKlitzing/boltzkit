@@ -34,6 +34,8 @@ from typing import Literal, Sequence
 import matplotlib.pyplot as plt
 import numpy as np
 
+from boltzkit.utils.molecular.marginals import get_phi_psi_vectors
+
 
 def to_free_energy(hist: np.ndarray, shift_min: bool = False) -> np.ndarray:
     """
@@ -228,3 +230,90 @@ def plot_2D_free_energy(
             cbar_.set_label(cbar_label)
 
     return fig, ax
+
+
+def ramachandran_histogram(
+    samples: np.ndarray,
+    n_bins: int = 100,
+    data_range: tuple[tuple[float, float], tuple[float, float]] | None = None,
+    show: bool = True,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """
+    Compute and display a 2D Ramachandran histogram.
+
+    Parameters
+    ----------
+    samples : np.ndarray
+        Array of shape (N, 2) containing phi and psi angles.
+    n_bins : int, optional
+        Number of bins per dimension.
+    data_range : ((float, float), (float, float)) or None
+        Range for phi and psi axes: ((phi_min, phi_max), (psi_min, psi_max)).
+        If None, inferred from the data.
+    show : bool
+        Whether to display the histogram plot.
+
+    Returns
+    -------
+    hist : np.ndarray
+        2D histogram counts of shape (n_bins, n_bins).
+    xedges : np.ndarray
+        Bin edges for phi.
+    yedges : np.ndarray
+        Bin edges for psi.
+    """
+
+    if samples.ndim != 2 or samples.shape[1] != 2:
+        raise ValueError("samples must have shape (N, 2)")
+
+    phi = samples[:, 0]
+    psi = samples[:, 1]
+
+    if data_range is None:
+        data_range = (
+            (float(np.min(phi)), float(np.max(phi))),
+            (float(np.min(psi)), float(np.max(psi))),
+        )
+
+    hist, xedges, yedges = np.histogram2d(
+        phi, psi, bins=n_bins, range=data_range, density=True
+    )
+    hist = to_free_energy(hist)
+
+    if show:
+        plt.figure(figsize=(6, 5))
+        plt.imshow(
+            hist.T,
+            origin="lower",
+            extent=[
+                xedges[0],
+                xedges[-1],
+                yedges[0],
+                yedges[-1],
+            ],
+            aspect="auto",
+        )
+        plt.xlabel("phi")
+        plt.ylabel("psi")
+        plt.title("Ramachandran Histogram")
+        plt.colorbar(label=r"free energy / $k_B T$")
+        plt.tight_layout()
+        plt.show()
+
+    return hist, xedges, yedges
+
+
+if __name__ == "__main__":
+    from boltzkit.targets.boltzmann import MolecularBoltzmann
+
+    bm = MolecularBoltzmann("datasets/chrklitz99/test_system")
+
+    topology = bm.get_mdtraj_topology()
+
+    gt_samples_path = bm._repo.load_file("300K_val.npy")
+    gt_samples = np.load(gt_samples_path)
+
+    phis, psis = get_phi_psi_vectors(gt_samples, topology)
+    angles = np.stack([phis, psis], -1)  # (batch, <num-angle-pairs>, 2)
+    angle_pair_index = 0
+    ramachandran_histogram(angles[:, angle_pair_index, :])
