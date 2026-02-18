@@ -122,24 +122,35 @@ def get_torus_wasserstein_2(
     return T_W2
 
 
-def get_ramachandran_kl(hist_true: Histogram2D, hist_pred: Histogram2D):
-    assert hist_true.get_num_bins() == hist_pred.get_num_bins()
+def get_ramachandran_kl(hist_p: Histogram2D, hist_q: Histogram2D):
+    assert hist_p.get_num_bins() == hist_q.get_num_bins()
 
-    hist_ram_true = hist_true.get_normalized_counts()
-    hist_ram_pred = hist_pred.get_normalized_counts()
+    hist_ram_p = hist_p.get_as_density()
+    hist_ram_q = hist_q.get_as_density()
 
     eps_ram = 1e-10
-    n_bins_ram = hist_true.get_num_bins()
+    bin_area = hist_p.get_bin_area()
 
-    np.log(hist_ram_true + eps_ram)
-    np.log(hist_ram_pred + eps_ram)
-
-    log_ratio = np.log(hist_ram_true + eps_ram) - np.log(hist_ram_pred + eps_ram)
+    log_ratio = np.log(hist_ram_p + eps_ram) - np.log(hist_ram_q + eps_ram)
     kld_ram = (
-        np.sum(hist_ram_true * log_ratio)
-        * (2 * np.pi / n_bins_ram) ** 2  # To get the properly normalized integral / KLD
+        np.sum(hist_ram_p * log_ratio)
+        * bin_area  # To get the properly normalized integral / KLD
     )
-    return kld_ram
+    return float(kld_ram)
+
+
+def get_ramachandran_total_variation(hist_p: Histogram2D, hist_q: Histogram2D):
+    assert hist_p.get_num_bins() == hist_q.get_num_bins()
+
+    hist_ram_p = hist_p.get_as_density()
+    hist_ram_q = hist_q.get_as_density()
+
+    bin_area = hist_p.get_bin_area()
+
+    total_variation_ram = (
+        0.5 * np.sum(np.abs(hist_ram_p - hist_ram_q)) * bin_area
+    )  # To get the properly normalized integral / KLD
+    return float(total_variation_ram)
 
 
 if __name__ == "__main__":
@@ -156,7 +167,6 @@ if __name__ == "__main__":
 
     gt_samples_path = bm._repo.load_file("300K_val.npy")
     gt_samples = np.load(gt_samples_path)
-    print(gt_samples.shape)
 
     angles = get_torsion_angles(gt_samples, topology)
     torsion_marginals = get_torsion_marginal_hists(*angles)
@@ -164,17 +174,20 @@ if __name__ == "__main__":
     for i, marginals_i in enumerate(torsion_marginals):
         ram_hist = marginals_i["phi_psi"]
 
-        adjusted_counts = ram_hist.counts + 0.001 * np.abs(
-            np.random.randn(*ram_hist.counts.shape)
+        adjusted_counts = ram_hist.get_as_density() + 0.001 * np.abs(
+            np.random.randn(*ram_hist.get_num_bins())
         )
-        adjusted_counts = adjusted_counts / adjusted_counts.sum()
         fake_ram_hist = Histogram2D(
             adjusted_counts,
             ram_hist.bin_edges_x,
             ram_hist.bin_edges_y,
+            ram_hist.n_producing_samples,
         )
         ram_kl = get_ramachandran_kl(ram_hist, fake_ram_hist)
+        ram_tv = get_ramachandran_total_variation(ram_hist, fake_ram_hist)
         print(f"Fake Ram KL: {ram_kl:.4f}")
+        print(f"Fake Ram TV: {ram_tv:.4f}")
+
         visualize_histogram_2d(
             ram_hist,
             show=True,

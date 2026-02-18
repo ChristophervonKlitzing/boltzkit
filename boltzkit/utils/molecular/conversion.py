@@ -21,6 +21,7 @@ def vec3_list_to_numpy(pos: list[mm.Vec3]) -> np.ndarray:
 def to_free_energy(hist: np.ndarray, shift_min: bool = False) -> np.ndarray:
     """
     Convert histogram counts into free energy values (in units of kT).
+    Normalization of hist is not important as this function normalizes them.
 
     Parameters
     ----------
@@ -34,11 +35,9 @@ def to_free_energy(hist: np.ndarray, shift_min: bool = False) -> np.ndarray:
     np.ndarray
         Free energy values corresponding to histogram counts.
     """
-    # This function reproduces the behavior of PyEMMA's _to_free_energy in a self-contained form
-    # to avoid the additional dependency.
-    # This function performs a generic mathematical transformation from histogram counts to free energies.
-    # Being independently implemented and a generic mathematical idea, PyEMMA's license does not apply to this code.
 
+    # Free energy is based on probability of being in bin[i,j] not on its density
+    # -> the bin area should therefore not be included in the normalization.
     probs = hist / hist.sum()
 
     # Prevent divide-by-zero warnings from np.log by replacing zeros with a tiny positive value.

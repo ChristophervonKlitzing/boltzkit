@@ -58,14 +58,13 @@ def visualize_histogram_1d(
 
     # Convert to free energy if requested
     if plot_as_free_energy:
-        y = to_free_energy(hist.counts)
+        y = to_free_energy(hist.get_normalized_counts())
         if ylabel is None:
             ylabel = r"free energy / $k_B T$"
     else:
-        y = hist.counts
+        y = hist.get_as_density()
         if ylabel is None:
-            density = np.abs(y.sum() - 1.0) <= 1e-5
-            ylabel = "Probability density" if density else "Counts"
+            ylabel = "Probability density"
 
     # Create axes if not provided
     new_plot = ax is None
@@ -144,14 +143,13 @@ def visualize_histogram_2d(
 
     # Convert to free energy if requested
     if plot_as_free_energy:
-        z = to_free_energy(hist.counts)
+        z = to_free_energy(hist.get_normalized_counts())
         if cbar_label is None:
             cbar_label = r"free energy / $k_B T$"
     else:
-        z = hist.counts
+        z = hist.get_as_density()
         if cbar_label is None:
-            density = np.abs(z.sum() - 1.0) <= 1e-5
-            cbar_label = "Probability density" if density else "Counts"
+            cbar_label = "Probability density"
 
     # Figure ownership
     new_plot = ax is None
