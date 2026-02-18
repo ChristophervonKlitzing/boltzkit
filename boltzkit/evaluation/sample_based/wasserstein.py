@@ -48,7 +48,7 @@ def get_torus_wasserstein(angles0: np.ndarray, angles1: np.ndarray) -> float:
     return float(np.sqrt(dist_squared).item())
 
 
-def compute_euclidean_wasserstein_1_2(
+def get_euclidean_wasserstein_1_2(
     X1: np.ndarray,
     X2: np.ndarray,
     weights1: np.ndarray | None = None,
@@ -146,5 +146,5 @@ if __name__ == "__main__":
     gt_samples = np.random.randn(1_000, 66)
     model_samples = np.random.randn(1_000, 66)
 
-    W1, W2 = compute_euclidean_wasserstein_1_2(model_samples, gt_samples)
+    W1, W2 = get_euclidean_wasserstein_1_2(model_samples, gt_samples)
     print(W1, W2)

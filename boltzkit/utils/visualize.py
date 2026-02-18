@@ -2,13 +2,13 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 from boltzkit.utils.pdf import matplotlib_to_pdf_buffer
-from boltzkit.utils.molecular.conversion import to_free_energy
-from boltzkit.evaluation.sample_based.histogram import Histogram1D, Histogram2D
+from .molecular.conversion import to_free_energy
+from .histogram import Histogram1D, Histogram2D
 
 
 def visualize_histogram_1d(
     hist: Histogram1D,
-    plot_as_free_energy: bool = True,
+    plot_as_free_energy: bool = False,
     show: bool = False,
     ax: plt.Axes | None = None,
     title: str | None = None,
@@ -101,7 +101,7 @@ def visualize_histogram_1d(
 
 def visualize_histogram_2d(
     hist: Histogram2D,
-    plot_as_free_energy: bool = True,
+    plot_as_free_energy: bool = False,
     show: bool = False,
     ax: plt.Axes | None = None,
     title: str | None = None,

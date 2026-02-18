@@ -3,7 +3,7 @@ import numpy as np
 from boltzkit.utils.shape_utils import squeeze_last_dim
 
 
-def compute_elbo(log_weights: np.ndarray) -> float:
+def get_elbo(log_weights: np.ndarray) -> float:
     """
     Compute the Evidence Lower Bound (ELBO) using samples from q(x).
 
@@ -26,7 +26,7 @@ def compute_elbo(log_weights: np.ndarray) -> float:
     return float(log_weights.mean())
 
 
-def compute_eubo(log_weights: np.ndarray) -> float:
+def get_eubo(log_weights: np.ndarray) -> float:
     """
     Compute the Evidence Upper Bound (EUBO) using samples from p(x).
 
@@ -49,7 +49,7 @@ def compute_eubo(log_weights: np.ndarray) -> float:
     return float(log_weights.mean())
 
 
-def compute_nll(model_log_prob: np.ndarray) -> float:
+def get_nll(model_log_prob: np.ndarray) -> float:
     """
     Compute the negative log-likelihood under the model q(x).
 
@@ -87,7 +87,7 @@ if __name__ == "__main__":
     # Importance log-weights for samples x ~ q(x)
     # ------------------------------------------------------------------
     log_weights_q = target_log_prob_q - model_log_prob
-    elbo = compute_elbo(log_weights_q)
+    elbo = get_elbo(log_weights_q)
 
     # ------------------------------------------------------------------
     # Samples x ~ p(x) for forward KL
@@ -96,7 +96,7 @@ if __name__ == "__main__":
     target_log_prob_p = -0.5 * ((target_samples - shift)) ** 2  # unnormalized log p(x)
     model_log_prob_p = -0.5 * target_samples**2 - 0.5 * np.log(2 * np.pi)
     log_weights_p = target_log_prob_p - model_log_prob_p
-    eubo = compute_eubo(log_weights_p)  # automatically normalizes p
+    eubo = get_eubo(log_weights_p)  # automatically normalizes p
 
     print(f"ELBO: {elbo:.4f}")
     print(f"EUBO: {eubo:.4f}")

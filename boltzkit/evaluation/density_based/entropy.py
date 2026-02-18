@@ -4,7 +4,7 @@ from scipy.special import logsumexp as _logsumexp
 from boltzkit.utils.shape_utils import squeeze_last_dim
 
 
-def compute_shannon_entropy(log_probs: np.ndarray) -> float:
+def get_shannon_entropy(log_probs: np.ndarray) -> float:
     """
     Compute the Shannon entropy of the **normalized** distribution q(x).
 
@@ -24,7 +24,7 @@ def compute_shannon_entropy(log_probs: np.ndarray) -> float:
     return float(-log_probs.mean())
 
 
-def compute_tsallis_entropy(log_probs: np.ndarray, q: float) -> float:
+def get_tsallis_entropy(log_probs: np.ndarray, q: float) -> float:
     """
     Compute the Tsallis entropy of a distribution from log-probabilities.
 
@@ -68,9 +68,9 @@ if __name__ == "__main__":
     # log q(x) -- normalized density
     model_log_prob = -0.5 * model_samples**2 - 0.5 * np.log(2.0 * np.pi)
 
-    shannon_entropy = compute_shannon_entropy(model_log_prob)
+    shannon_entropy = get_shannon_entropy(model_log_prob)
 
     q = 1.001
-    tsallis_entropy = compute_tsallis_entropy(model_log_prob, q=q)
+    tsallis_entropy = get_tsallis_entropy(model_log_prob, q=q)
     print(f"Shannon entropy: {shannon_entropy:.4f}")
     print(f"Tsallis entropy: {tsallis_entropy:.4f} (q={q})")

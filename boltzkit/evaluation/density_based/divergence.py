@@ -3,7 +3,7 @@ from scipy.special import logsumexp as _logsumexp
 from boltzkit.utils.shape_utils import squeeze_last_dim
 
 
-def compute_reverse_logZ(log_weights: np.ndarray) -> float:
+def get_reverse_logZ(log_weights: np.ndarray) -> float:
     """
     Estimate the log-normalization constant of p(x) using samples from q(x).
 
@@ -25,7 +25,7 @@ def compute_reverse_logZ(log_weights: np.ndarray) -> float:
     return float(logZ)
 
 
-def compute_forward_logZ(log_weights: np.ndarray) -> float:
+def get_forward_logZ(log_weights: np.ndarray) -> float:
     """
     Estimate the log-normalization constant of p(x) using samples from p(x).
 
@@ -47,7 +47,7 @@ def compute_forward_logZ(log_weights: np.ndarray) -> float:
     return float(logZ)
 
 
-def compute_kl_divergence_q(log_weights: np.ndarray, logZ: float | None = None):
+def get_kl_divergence_q(log_weights: np.ndarray, logZ: float | None = None):
     """
     Compute the importance-weighted forward KL using samples from q:
         KL(p || q) = E_q[ w(x) * log w(x) ],  w(x) = p(x)/q(x)
@@ -68,7 +68,7 @@ def compute_kl_divergence_q(log_weights: np.ndarray, logZ: float | None = None):
     log_weights = squeeze_last_dim(log_weights)
 
     if logZ is None:
-        logZ = compute_reverse_logZ(log_weights)
+        logZ = get_reverse_logZ(log_weights)
     log_w = log_weights - logZ
 
     # KL = E_q[w * log w]
@@ -76,7 +76,7 @@ def compute_kl_divergence_q(log_weights: np.ndarray, logZ: float | None = None):
     return float(kl)
 
 
-def compute_kl_divergence_p(log_weights: np.ndarray, logZ: float | None = None):
+def get_kl_divergence_p(log_weights: np.ndarray, logZ: float | None = None):
     """
     Compute the forward KL using samples from p:
         KL(p || q) = E_p[ log w(x) ],  w(x) = p(x)/q(x)
@@ -97,14 +97,14 @@ def compute_kl_divergence_p(log_weights: np.ndarray, logZ: float | None = None):
     log_weights = squeeze_last_dim(log_weights)
 
     if logZ is None:
-        logZ = compute_forward_logZ(log_weights)
+        logZ = get_forward_logZ(log_weights)
     log_weights = log_weights - logZ
 
     kl = np.mean(log_weights)
     return float(kl)
 
 
-def compute_alpha_divergence_q(
+def get_alpha_divergence_q(
     log_weights: np.ndarray, alpha: float, logZ: float | None = None
 ):
     """
@@ -137,7 +137,7 @@ def compute_alpha_divergence_q(
     logN: float = np.log(log_weights.shape[0])
 
     if logZ is None:
-        logZ = compute_reverse_logZ(log_weights)
+        logZ = get_reverse_logZ(log_weights)
     log_weights = log_weights - logZ
 
     log_int = _logsumexp(log_weights * alpha) - logN
@@ -145,7 +145,7 @@ def compute_alpha_divergence_q(
     return float(alpha_div)
 
 
-def compute_alpha_divergence_p(
+def get_alpha_divergence_p(
     log_weights: np.ndarray, alpha: float, logZ: float | None = None
 ):
     """
@@ -179,7 +179,7 @@ def compute_alpha_divergence_p(
     logN: float = np.log(log_weights.shape[0])
 
     if logZ is None:
-        logZ = compute_forward_logZ(log_weights)
+        logZ = get_forward_logZ(log_weights)
     log_weights = log_weights - logZ
 
     log_int = _logsumexp(log_weights * (alpha - 1)) - logN
@@ -207,7 +207,7 @@ if __name__ == "__main__":
     # Importance log-weights for samples x ~ q(x)
     # ------------------------------------------------------------------
     log_weights_q = target_log_prob_q - model_log_prob
-    iw_fwd_kl = compute_kl_divergence_q(log_weights_q)
+    iw_fwd_kl = get_kl_divergence_q(log_weights_q)
 
     # ------------------------------------------------------------------
     # Samples x ~ p(x) for forward KL
@@ -216,7 +216,7 @@ if __name__ == "__main__":
     target_log_prob_p = -0.5 * ((target_samples - shift)) ** 2  # unnormalized log p(x)
     model_log_prob_p = -0.5 * target_samples**2 - 0.5 * np.log(2 * np.pi)
     log_weights_p = target_log_prob_p - model_log_prob_p
-    fwd_kl = compute_kl_divergence_p(log_weights_p)  # automatically normalizes p
+    fwd_kl = get_kl_divergence_p(log_weights_p)  # automatically normalizes p
 
     print("Gaussian importance sampling KL example")
     print("--------------------------------------")
@@ -224,7 +224,7 @@ if __name__ == "__main__":
     print(f"fwd kl div (x ~ p): {fwd_kl:.6f}")
 
     alpha = 0.999999
-    alpha_div_q = compute_alpha_divergence_q(log_weights_q, alpha=alpha)
-    alpha_div_p = compute_alpha_divergence_p(log_weights_p, alpha=alpha)
+    alpha_div_q = get_alpha_divergence_q(log_weights_q, alpha=alpha)
+    alpha_div_p = get_alpha_divergence_p(log_weights_p, alpha=alpha)
     print(f"alpha div (x ~ q, {alpha=}): {alpha_div_q:.6f}")
     print(f"alpha div (x ~ p, {alpha=}): {alpha_div_p:.6f}")

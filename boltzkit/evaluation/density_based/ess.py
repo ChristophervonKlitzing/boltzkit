@@ -4,7 +4,7 @@ from scipy.special import logsumexp as _logsumexp
 from boltzkit.utils.shape_utils import squeeze_last_dim
 
 
-def compute_reverse_ess(log_weights: np.ndarray) -> float:
+def get_reverse_ess(log_weights: np.ndarray) -> float:
     """
     Compute the reverse effective sample size (ESS) from log-weights.
 
@@ -44,7 +44,7 @@ def compute_reverse_ess(log_weights: np.ndarray) -> float:
     return float(np.exp(log_ess))
 
 
-def compute_forward_ess(log_weights: np.ndarray) -> float:
+def get_forward_ess(log_weights: np.ndarray) -> float:
     """
     Compute the forward effective sample size (ESS) from log-weights.
 
@@ -113,13 +113,13 @@ if __name__ == "__main__":
     # ------------------------------------------------------------------
     # Compute ESS
     # ------------------------------------------------------------------
-    reverse_ess = compute_reverse_ess(log_weights)
+    reverse_ess = get_reverse_ess(log_weights)
 
     target_samples = rng.normal(loc=1.0, scale=0.5, size=N)
     target_log_prob_fwd = -0.5 * ((target_samples - 1.0) / 0.5) ** 2
     model_log_prob_fwd = -0.5 * target_samples**2 - 0.5 * np.log(2.0 * np.pi)
     fwd_log_weights = target_log_prob_fwd - model_log_prob_fwd
-    forward_ess = compute_forward_ess(fwd_log_weights)
+    forward_ess = get_forward_ess(fwd_log_weights)
 
     print("Gaussian importance sampling example")
     print("-----------------------------------")
