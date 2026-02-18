@@ -4,3 +4,4 @@ huggingface-hub
 pyyaml
 POT
 deeptime
+matplotlib

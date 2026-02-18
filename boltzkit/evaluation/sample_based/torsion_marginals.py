@@ -1,3 +1,4 @@
+import io
 from typing import Literal, TypeAlias
 import numpy as np
 
@@ -10,8 +11,16 @@ from boltzkit.utils.histogram import (
     get_histogram_2d,
 )
 from .wasserstein import get_torus_wasserstein as _get_torus_wasserstein
+from matplotlib import pyplot as plt
 
-T: TypeAlias = dict[Literal["phi_psi", "phi", "psi"], Histogram1D | Histogram2D]
+
+from boltzkit.utils.visualize import (
+    get_balanced_subplot_grid,
+    visualize_histogram_1d,
+    visualize_histogram_2d,
+)
+
+from boltzkit.utils.pdf import matplotlib_to_pdf_buffer
 
 
 def get_torsion_angles(samples: np.ndarray, topology: md.Topology):
@@ -38,7 +47,9 @@ def get_torsion_angles(samples: np.ndarray, topology: md.Topology):
     return get_phi_psi_vectors(samples, topology)
 
 
-def get_torsion_marginal_hists(phis: np.ndarray, psis: np.ndarray, **kwargs) -> list[T]:
+def get_torsion_marginal_hists(
+    phis: np.ndarray, psis: np.ndarray, **kwargs
+) -> tuple[list[Histogram2D], list[Histogram1D], list[Histogram1D]]:
     """
     Compute 1D and 2D histograms of torsion angles for all φ/ψ pairs.
 
@@ -53,8 +64,8 @@ def get_torsion_marginal_hists(phis: np.ndarray, psis: np.ndarray, **kwargs) -> 
 
     Returns
     -------
-    list[T]
-        A list of dictionaries (one per torsion pair). Each dictionary has keys:
+    tuple[Histogram2D, Histogram1D, Histogram1D]
+        A tuple of equal-size lists (one list element per torsion angle pair).
         - "phi_psi": 2D `Histogram2D` of the joint φ/ψ angles
         - "phi": 1D `Histogram1D` of φ angles
         - "psi": 1D `Histogram1D` of ψ angles
@@ -64,29 +75,30 @@ def get_torsion_marginal_hists(phis: np.ndarray, psis: np.ndarray, **kwargs) -> 
     range_1d = (-np.pi, np.pi)
     range_2d = ((-np.pi, np.pi), (-np.pi, np.pi))
 
-    torsion_marginals: list[T] = []
+    phi_psi_hists = []
+    phi_hists = []
+    psi_hists = []
+
     for angle_pair_idx in range(angles.shape[1]):
-        marginals: T = {}
+
         # 2D histogram
         hist_2d = get_histogram_2d(
             angles[:, angle_pair_idx, :], data_range=range_2d, **kwargs
         )
-        marginals["phi_psi"] = hist_2d
+        phi_psi_hists.append(hist_2d)
 
         # 2 1D histograms
         phi_hist_1d = get_histogram_1d(
             angles[:, angle_pair_idx, 0], data_range=range_1d, **kwargs
         )
-        marginals["phi"] = phi_hist_1d
+        phi_hists.append(phi_hist_1d)
 
         psi_hist_1d = get_histogram_1d(
             angles[:, angle_pair_idx, 1], data_range=range_1d, **kwargs
         )
-        marginals["psi"] = psi_hist_1d
+        psi_hists.append(psi_hist_1d)
 
-        torsion_marginals.append(marginals)
-
-    return torsion_marginals
+    return phi_psi_hists, phi_hists, psi_hists
 
 
 def get_torus_wasserstein_2(
@@ -153,6 +165,129 @@ def get_ramachandran_total_variation(hist_p: Histogram2D, hist_q: Histogram2D):
     return float(total_variation_ram)
 
 
+def visualize_torsion_marginals_single_type(
+    hists: list[Histogram2D] | list[Histogram1D],
+    plot_as_free_energy: bool,
+    grid_shape: tuple[int, int] | None = None,
+    show: bool = False,
+    **kwargs,
+):
+    num_hists = len(hists)
+
+    if grid_shape is None:
+        n_rows, n_cols = get_balanced_subplot_grid(num_hists)
+    else:
+        n_rows, n_cols = grid_shape
+
+    fig, axes = plt.subplots(n_rows, n_cols, squeeze=False)
+
+    for i in range(num_hists):
+        row = i // n_cols
+        col = i % n_cols
+        ax: plt.Axes = axes[row, col]
+
+        h = hists[i]
+
+        if isinstance(h, Histogram1D):
+            visualize_histogram_1d(
+                h, plot_as_free_energy=plot_as_free_energy, ax=ax, **kwargs
+            )
+        else:
+            visualize_histogram_2d(
+                h, plot_as_free_energy=plot_as_free_energy, ax=ax, **kwargs
+            )
+
+    pdf_buffer = matplotlib_to_pdf_buffer(fig)
+
+    if show:
+        plt.show()
+
+    return pdf_buffer
+
+
+def visualize_torsion_marginals_per_type(
+    torsion_marginals: tuple[list[Histogram2D], list[Histogram1D], list[Histogram1D]],
+    plot_as_free_energy: bool,
+    grid_shape: tuple[int, int] | None = None,
+    show: bool = False,
+    **kwargs,
+) -> tuple[io.BytesIO, io.BytesIO, io.BytesIO]:
+    labels = (("phi", "psi"), ("phi", None), (None, "psi"))
+    pdf_list = []
+    for h, labels in zip(torsion_marginals, labels):
+        xlabel, ylabel = labels
+        pdf = visualize_torsion_marginals_single_type(
+            h,
+            plot_as_free_energy=plot_as_free_energy,
+            grid_shape=grid_shape,
+            show=show,
+            xlabel=xlabel,
+            ylabel=ylabel,
+            **kwargs,
+        )
+        pdf_list.append(pdf)
+
+    return tuple(pdf_list)
+
+
+def visualize_torsion_marginals_all(
+    torsion_marginals: tuple[list[Histogram2D], list[Histogram1D], list[Histogram1D]],
+    plot_as_free_energy: bool,
+    show: bool = False,
+    **kwargs,
+):
+    assert len(torsion_marginals[0]) == len(torsion_marginals[1])
+    assert len(torsion_marginals[1]) == len(torsion_marginals[2])
+
+    n_pairs = len(torsion_marginals[0])
+
+    fig, axes = plt.subplots(n_pairs, 3, squeeze=False, figsize=(10, 3 * n_pairs))
+    for i in range(n_pairs):
+        ax_ram: plt.Axes = axes[i, 2]
+        ax_phi: plt.Axes = axes[i, 0]
+        ax_psi: plt.Axes = axes[i, 1]
+
+        h_ram = torsion_marginals[0][i]
+        h_phi = torsion_marginals[1][i]
+        h_psi = torsion_marginals[2][i]
+
+        phi_label = f"$\\phi_{i}$"
+        psi_label = f"$\\psi_{i}$"
+
+        visualize_histogram_2d(
+            h_ram,
+            plot_as_free_energy=plot_as_free_energy,
+            ax=ax_ram,
+            xlabel=phi_label,
+            ylabel=psi_label,
+            **kwargs,
+        )
+
+        visualize_histogram_1d(
+            h_phi,
+            plot_as_free_energy=plot_as_free_energy,
+            ax=ax_phi,
+            xlabel=phi_label,
+            **kwargs,
+        )
+
+        visualize_histogram_1d(
+            h_psi,
+            plot_as_free_energy=plot_as_free_energy,
+            ax=ax_psi,
+            xlabel=psi_label,
+            **kwargs,
+            transpose=False,
+        )
+
+    pdf = matplotlib_to_pdf_buffer(fig)
+
+    if show:
+        plt.show()
+
+    return pdf
+
+
 if __name__ == "__main__":
     from boltzkit.targets.boltzmann import MolecularBoltzmann
     from boltzkit.utils.pdf import save_pdf
@@ -166,47 +301,23 @@ if __name__ == "__main__":
     topology = bm.get_mdtraj_topology()
 
     gt_samples_path = bm._repo.load_file("300K_val.npy")
-    gt_samples = np.load(gt_samples_path)
+    gt_samples = np.load(gt_samples_path)  # [:15_000]
 
     angles = get_torsion_angles(gt_samples, topology)
+    a0 = angles[0]
+    a1 = angles[1]
+
+    a0 = np.concatenate([a0, a0], 1)
+    a1 = np.concatenate([a1, a1], 1)
+    angles = (a0, a1)
+
     torsion_marginals = get_torsion_marginal_hists(*angles)
+    plot_as_free_energy = True
 
-    for i, marginals_i in enumerate(torsion_marginals):
-        ram_hist = marginals_i["phi_psi"]
+    pdf_buffer = visualize_torsion_marginals_all(
+        torsion_marginals,
+        plot_as_free_energy=plot_as_free_energy,
+        show=True,
+    )
 
-        adjusted_counts = ram_hist.get_as_density() + 0.001 * np.abs(
-            np.random.randn(*ram_hist.get_num_bins())
-        )
-        fake_ram_hist = Histogram2D(
-            adjusted_counts,
-            ram_hist.bin_edges_x,
-            ram_hist.bin_edges_y,
-            ram_hist.n_producing_samples,
-        )
-        ram_kl = get_ramachandran_kl(ram_hist, fake_ram_hist)
-        ram_tv = get_ramachandran_total_variation(ram_hist, fake_ram_hist)
-        print(f"Fake Ram KL: {ram_kl:.4f}")
-        print(f"Fake Ram TV: {ram_tv:.4f}")
-
-        visualize_histogram_2d(
-            ram_hist,
-            show=True,
-            xlabel=f"$\\phi_{i}$",
-            ylabel=f"$\\psi_{i}$",
-            plot_as_free_energy=True,
-        )
-        visualize_histogram_2d(
-            fake_ram_hist,
-            show=True,
-            xlabel=f"$\\phi_{i}$",
-            ylabel=f"$\\psi_{i}$",
-            plot_as_free_energy=True,
-        )
-        for angle_name in ("phi", "psi"):
-            visualize_histogram_1d(
-                marginals_i[angle_name],
-                show=True,
-                xlabel=f"$\\{angle_name}_{i}$",
-                plot_as_free_energy=True,
-            )
-    # save_pdf(pdf_buffer, "ram.pdf")
+    save_pdf(pdf_buffer, "torsions.pdf")

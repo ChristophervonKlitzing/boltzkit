@@ -1,3 +1,4 @@
+import math
 import matplotlib.pyplot as plt
 import numpy as np
 
@@ -16,6 +17,7 @@ def visualize_histogram_1d(
     ylabel: str | None = None,
     label: str | None = None,
     linestyle: str = "-",
+    transpose: bool = False,
 ):
     """
     Plot a 1D histogram as counts or free energy.
@@ -63,8 +65,12 @@ def visualize_histogram_1d(
             ylabel = r"free energy / $k_B T$"
     else:
         y = hist.get_as_density()
+
+        # This leaves areas without samples empty (no information).
+        y[y == 0] = np.nan
+
         if ylabel is None:
-            ylabel = "Probability density"
+            ylabel = "probability density"
 
     # Create axes if not provided
     new_plot = ax is None
@@ -72,6 +78,10 @@ def visualize_histogram_1d(
         fig, ax = plt.subplots(figsize=(6, 4))
     else:
         fig = ax.figure
+
+    if transpose:
+        x, y = (y, x)
+        xlabel, ylabel = (ylabel, xlabel)
 
     # Plot the data
     ax.plot(x, y, label=label, linestyle=linestyle)
@@ -85,6 +95,8 @@ def visualize_histogram_1d(
         ax.set_ylabel(ylabel)
     if label:
         ax.legend()
+
+    # ax.yaxis.set_label_position(ylabel_postion)
 
     fig.tight_layout()
     pdf_buffer = matplotlib_to_pdf_buffer(fig)
@@ -148,8 +160,13 @@ def visualize_histogram_2d(
             cbar_label = r"free energy / $k_B T$"
     else:
         z = hist.get_as_density()
+
+        # This makes areas without samples white (no information),
+        # which increases contrast in low-density (but not zero) regions.
+        z[z == 0] = np.nan
+
         if cbar_label is None:
-            cbar_label = "Probability density"
+            cbar_label = "probability density"
 
     # Figure ownership
     new_plot = ax is None
@@ -162,7 +179,7 @@ def visualize_histogram_2d(
     else:
         fig = ax.figure
 
-    # Plot using imshow
+    # Plot
     im = ax.imshow(
         z.T,
         extent=hist.get_extend(),
@@ -198,3 +215,31 @@ def visualize_histogram_2d(
         plt.close(fig)
 
     return pdf_buffer
+
+
+def get_balanced_subplot_grid(n: int) -> tuple[int, int]:
+    """
+    Given n subplots, returns a (rows, cols) tuple for a balanced layout.
+
+    - Tries to make it roughly square.
+    - If not square, prefers one row less than columns.
+    """
+    if n <= 0:
+        raise ValueError("Number of subplots must be positive")
+
+    # Start with the integer square root
+    cols = math.ceil(math.sqrt(n))
+    rows = math.ceil(n / cols)
+
+    # If rows == cols - 1, good; if rows < cols - 1, try to reduce cols
+    if rows < cols - 1:
+        cols -= 1
+        rows = math.ceil(n / cols)
+
+    return rows, cols
+
+
+if __name__ == "__main__":
+    for i in range(1, 15):
+        rows, cols = get_balanced_subplot_grid(i)
+        print(i, rows, cols, rows * cols)
