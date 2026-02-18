@@ -122,6 +122,26 @@ def get_torus_wasserstein_2(
     return T_W2
 
 
+def get_ramachandran_kl(hist_true: Histogram2D, hist_pred: Histogram2D):
+    assert hist_true.get_num_bins() == hist_pred.get_num_bins()
+
+    hist_ram_true = hist_true.get_normalized_counts()
+    hist_ram_pred = hist_pred.get_normalized_counts()
+
+    eps_ram = 1e-10
+    n_bins_ram = hist_true.get_num_bins()
+
+    np.log(hist_ram_true + eps_ram)
+    np.log(hist_ram_pred + eps_ram)
+
+    log_ratio = np.log(hist_ram_true + eps_ram) - np.log(hist_ram_pred + eps_ram)
+    kld_ram = (
+        np.sum(hist_ram_true * log_ratio)
+        * (2 * np.pi / n_bins_ram) ** 2  # To get the properly normalized integral / KLD
+    )
+    return kld_ram
+
+
 if __name__ == "__main__":
     from boltzkit.targets.boltzmann import MolecularBoltzmann
     from boltzkit.utils.pdf import save_pdf
@@ -136,13 +156,34 @@ if __name__ == "__main__":
 
     gt_samples_path = bm._repo.load_file("300K_val.npy")
     gt_samples = np.load(gt_samples_path)
+    print(gt_samples.shape)
 
     angles = get_torsion_angles(gt_samples, topology)
     torsion_marginals = get_torsion_marginal_hists(*angles)
 
     for i, marginals_i in enumerate(torsion_marginals):
+        ram_hist = marginals_i["phi_psi"]
+
+        adjusted_counts = ram_hist.counts + 0.001 * np.abs(
+            np.random.randn(*ram_hist.counts.shape)
+        )
+        adjusted_counts = adjusted_counts / adjusted_counts.sum()
+        fake_ram_hist = Histogram2D(
+            adjusted_counts,
+            ram_hist.bin_edges_x,
+            ram_hist.bin_edges_y,
+        )
+        ram_kl = get_ramachandran_kl(ram_hist, fake_ram_hist)
+        print(f"Fake Ram KL: {ram_kl:.4f}")
         visualize_histogram_2d(
-            marginals_i["phi_psi"],
+            ram_hist,
+            show=True,
+            xlabel=f"$\\phi_{i}$",
+            ylabel=f"$\\psi_{i}$",
+            plot_as_free_energy=True,
+        )
+        visualize_histogram_2d(
+            fake_ram_hist,
             show=True,
             xlabel=f"$\\phi_{i}$",
             ylabel=f"$\\psi_{i}$",

@@ -11,6 +11,12 @@ class Histogram1D:
     def get_bin_centers(self):
         return 0.5 * (self.bin_edges[:-1] + self.bin_edges[1:])
 
+    def get_normalized_counts(self) -> np.ndarray:
+        return self.counts / self.counts.sum()
+
+    def get_num_bins(self):
+        return self.counts.shape[0]
+
 
 @dataclass
 class Histogram2D:
@@ -25,6 +31,12 @@ class Histogram2D:
             self.bin_edges_y[0],
             self.bin_edges_y[-1],
         ]
+
+    def get_normalized_counts(self) -> np.ndarray:
+        return self.counts / self.counts.sum()
+
+    def get_num_bins(self) -> int:
+        return self.counts.shape[0]
 
 
 def get_histogram_1d(
