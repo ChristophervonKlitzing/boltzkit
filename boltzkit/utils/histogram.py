@@ -1,5 +1,3 @@
-from dataclasses import dataclass
-
 import numpy as np
 
 
@@ -25,6 +23,9 @@ class Histogram1D:
     def get_normalized_counts(self) -> np.ndarray:
         # normalize again just in case
         return self._normalized_counts / self._normalized_counts.sum()
+
+    def get_approximate_absolute_counts(self) -> np.ndarray:
+        return self.get_normalized_counts() * self.n_producing_samples
 
     def get_extend(self) -> tuple[float, float]:
         return [
@@ -72,6 +73,9 @@ class Histogram2D:
     @property
     def bin_edges_y(self):
         return self._bin_edges_y
+
+    def get_approximate_absolute_counts(self) -> np.ndarray:
+        return self.get_normalized_counts() * self.n_producing_samples
 
     def get_extend(self) -> tuple[float, float, float, float]:
         return [
