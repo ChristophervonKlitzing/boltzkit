@@ -82,6 +82,25 @@ class Histogram2D:
         self._bin_edges_x = bin_edges_x
         self._bin_edges_y = bin_edges_y
 
+    def get_bin_centers(self):
+        x_centers = 0.5 * (self._bin_edges_x[:-1] + self._bin_edges_x[1:])
+        y_centers = 0.5 * (self._bin_edges_y[:-1] + self._bin_edges_y[1:])
+        return x_centers, y_centers
+
+    def __repr__(self):
+        counts = self.get_normalized_counts()
+        x_centers, y_centers = self.get_bin_centers()
+
+        # Weighted means
+        mean_x = (counts.sum(axis=1) * x_centers).sum()
+        mean_y = (counts.sum(axis=0) * y_centers).sum()
+
+        # Weighted stds
+        std_x = np.sqrt(((counts.sum(axis=1) * (x_centers - mean_x) ** 2).sum()))
+        std_y = np.sqrt(((counts.sum(axis=0) * (y_centers - mean_y) ** 2).sum()))
+
+        return f"Histogram2D(mean=({mean_x:.2f},{mean_y:.2f}),std=({std_x:.2f},{std_y:.2f}))"
+
     def save(self, fpath: str):
         np.savez(
             fpath,
