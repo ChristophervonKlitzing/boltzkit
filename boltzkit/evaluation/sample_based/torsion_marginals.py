@@ -1,5 +1,3 @@
-import io
-from typing import Literal, TypeAlias
 import numpy as np
 
 from boltzkit.utils.molecular.marginals import get_phi_psi_vectors
@@ -20,7 +18,7 @@ from boltzkit.utils.visualize import (
     visualize_histogram_2d,
 )
 
-from boltzkit.utils.pdf import matplotlib_to_pdf_buffer
+from boltzkit.utils.pdf import PdfBuffer, matplotlib_to_pdf_buffer
 
 
 def get_torsion_angles(samples: np.ndarray, topology: md.Topology):
@@ -211,7 +209,7 @@ def visualize_torsion_marginals_per_type(
     grid_shape: tuple[int, int] | None = None,
     show: bool = False,
     **kwargs,
-) -> tuple[io.BytesIO, io.BytesIO, io.BytesIO]:
+) -> tuple[PdfBuffer, PdfBuffer, PdfBuffer]:
     labels = (("phi", "psi"), ("phi", None), (None, "psi"))
     pdf_list = []
     for h, labels in zip(torsion_marginals, labels):

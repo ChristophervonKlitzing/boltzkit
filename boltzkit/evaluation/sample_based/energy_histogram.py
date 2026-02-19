@@ -1,5 +1,8 @@
+from matplotlib import pyplot as plt
 import numpy as np
-from boltzkit.utils.histogram import get_histogram_1d
+from boltzkit.utils.histogram import Histogram1D, get_histogram_1d
+from boltzkit.utils.pdf import matplotlib_to_pdf_buffer
+from boltzkit.utils.visualize import visualize_histogram_1d as _visualize_hist_1d
 
 
 def get_reduced_energy_hist(
@@ -85,14 +88,47 @@ def get_reduced_energy_hist(
     )
 
 
+def visualize_energy_hist_dual(
+    pred_energy_hist: Histogram1D, true_energy_hist: Histogram1D, show: bool = False
+):
+    fig, ax = plt.subplots()
+
+    # Plot both on the same axis
+    _visualize_hist_1d(
+        true_energy_hist,
+        ax=ax,
+        label="True",
+        show=False,
+    )
+
+    _visualize_hist_1d(
+        pred_energy_hist,
+        ax=ax,
+        label="Pred",
+        show=False,
+    )
+
+    ax.legend()
+    # ax.set_title("Reduced Energy Histogram")
+    ax.set_xlabel("energy")
+    ax.set_ylabel("probability density")
+
+    pdf_buffer = matplotlib_to_pdf_buffer(fig)
+
+    if show:
+        plt.show()
+
+    return pdf_buffer
+
+
 if __name__ == "__main__":
-    from boltzkit.utils.visualize import visualize_histogram_1d
 
     # Generate 1D Gaussian samples
     rng = np.random.default_rng(seed=42)
 
     # dummy log probs
     log_probs = rng.normal(loc=0.0, scale=1.0, size=100_000)
+    log_probs2 = rng.normal(loc=1.0, scale=1.3, size=100_000)
 
     # Test with extreme outliers
     log_probs[0] = -1e8
@@ -100,4 +136,5 @@ if __name__ == "__main__":
 
     # Compute reduced energy histogram using quantile selection
     energy_hist = get_reduced_energy_hist(log_probs=log_probs)
-    visualize_histogram_1d(energy_hist, show=True)
+    energy_hist2 = get_reduced_energy_hist(log_probs=log_probs2)
+    visualize_energy_hist_dual(energy_hist, energy_hist2, show=True)

@@ -51,7 +51,7 @@ def visualize_histogram_1d(
 
     Returns
     -------
-    pdf_buffer : io.BytesIO
+    pdf_buffer : PdfBuffer
         Buffer containing the generated PDF.
     """
 
@@ -149,7 +149,7 @@ def visualize_histogram_2d(
 
     Returns
     -------
-    pdf_buffer : io.BytesIO
+    pdf_buffer : PdfBuffer
         Buffer containing the generated PDF.
     """
 

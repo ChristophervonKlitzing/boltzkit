@@ -53,6 +53,9 @@ def get_nll(model_log_prob: np.ndarray) -> float:
     """
     Compute the negative log-likelihood under the model q(x).
 
+    Defined as:
+        NLL = -E_p[q(x)]
+
     Parameters
     ----------
     model_log_prob : np.ndarray

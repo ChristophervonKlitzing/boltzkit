@@ -1,3 +1,5 @@
+from abc import ABC
+import os
 import numpy as np
 
 
@@ -8,6 +10,24 @@ class Histogram1D:
         self._normalized_counts: np.ndarray = counts / counts.sum()
         self._n_producing_samples = n_producing_samples
         self._bin_edges = bin_edges
+
+    def __repr__(self):
+        p = self.get_normalized_counts()
+        x = self.get_bin_centers()
+        mean = (p * x).sum()
+        std = np.sqrt(((x - mean) ** 2 * p).sum())
+        return f"Histogram1D(mean={mean:.2f},std={std:.2f})"
+
+    def save(self, fpath: str):
+        np.savez(
+            fpath,
+            #
+            counts=self._normalized_counts,
+            n_producing_samples=self.n_producing_samples,
+            bin_edges=self._bin_edges,
+            #
+            allow_pickle=False,
+        )
 
     @property
     def n_producing_samples(self) -> int:
@@ -61,6 +81,18 @@ class Histogram2D:
         self._n_producing_samples = n_producing_samples
         self._bin_edges_x = bin_edges_x
         self._bin_edges_y = bin_edges_y
+
+    def save(self, fpath: str):
+        np.savez(
+            fpath,
+            #
+            counts=self._normalized_counts,
+            n_producing_samples=self.n_producing_samples,
+            bin_edges_x=self._bin_edges_x,
+            bin_edges_y=self._bin_edges_y,
+            #
+            allow_pickle=False,
+        )
 
     @property
     def n_producing_samples(self) -> int:
@@ -186,3 +218,25 @@ def get_histogram_2d(
         data_x, data_y, bins=n_bins, range=data_range, density=density
     )
     return Histogram2D(hist, xedges, yedges, data.shape[0])
+
+
+def load_histogram(fpath: str) -> Histogram1D | Histogram2D:
+    data = np.load(fpath, allow_pickle=False)
+    dict_data: dict[str, np.ndarray] = {k: data[k] for k in data}
+    assert "count" in dict_data, "File does not seem to contain a histogram"
+
+    dim = len(dict_data["count"].shape)
+    if dim == 1:
+        h = Histogram1D(**dict_data)
+    elif dim == 2:
+        h = Histogram2D(**dict_data)
+    else:
+        raise ValueError(f"Coult not load histogram")
+
+    return h
+
+
+def save_histograms(hists: dict[str, Histogram1D | Histogram2D], dirpath: str):
+    for name, h in hists.items():
+        fpath = os.path.join(dirpath, name)
+        h.save(fpath)

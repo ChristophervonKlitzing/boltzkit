@@ -1,8 +1,32 @@
 import io
+import os
 from matplotlib import pyplot as plt
+from dataclasses import dataclass
 
 
-def matplotlib_to_pdf_buffer(obj: plt.Figure | plt.Axes) -> io.BytesIO:
+@dataclass
+class PdfBuffer:
+    """
+    A wrapper to allow differentiation of raw data by type.
+    """
+
+    buffer: io.BytesIO
+
+    def __repr__(self):
+        size_bytes = len(self.buffer.getvalue())
+        # Format nicely
+        if size_bytes < 1024:
+            size_str = f"{size_bytes} B"
+        elif size_bytes < 1024**2:
+            size_str = f"{size_bytes / 1024:.1f} KB"
+        elif size_bytes < 1024**3:
+            size_str = f"{size_bytes / 1024**2:.2f} MB"
+        else:
+            size_str = f"{size_bytes / 1024**3:.2f} GB"
+        return f"PdfBuffer(size={size_str})"
+
+
+def matplotlib_to_pdf_buffer(obj: plt.Figure | plt.Axes) -> PdfBuffer:
     """
     Convert a matplotlib Figure or Axes to a PDF stored in memory.
 
@@ -21,23 +45,32 @@ def matplotlib_to_pdf_buffer(obj: plt.Figure | plt.Axes) -> io.BytesIO:
     buffer = io.BytesIO()
     fig.savefig(buffer, format="pdf", bbox_inches="tight")
     buffer.seek(0)
-    return buffer
+    return PdfBuffer(buffer)
 
 
-def save_pdf(obj: io.BytesIO, path: str) -> None:
+def save_pdf(obj: PdfBuffer, path: str) -> None:
     """
     Save a pdf in the form of a buffer into a PDF file.
     """
     with open(path, "wb") as f:
-        f.write(obj.getvalue())
+        f.write(obj.buffer.getvalue())
 
 
-def pdf_to_wandb_image(pdf_buffer: io.BytesIO, dpi=50):
+def save_pdfs(pdfs: dict[str, PdfBuffer], dirpath: str) -> None:
+    """
+    Save a dict of pdfs into a directory. dir must exist.
+    """
+    for name, pdf_buffer in pdfs.items():
+        fpath = os.path.join(dirpath, name)
+        save_pdf(pdf_buffer, fpath)
+
+
+def pdf_to_wandb_image(pdf_buffer: PdfBuffer, dpi=50):
     import wandb
     from pdf2image import convert_from_bytes
 
     # Convert first page to PIL image
-    images = convert_from_bytes(pdf_buffer, dpi=dpi)
+    images = convert_from_bytes(pdf_buffer.buffer, dpi=dpi)
     pil_image = images[0]
 
     return wandb.Image(pil_image)
