@@ -19,7 +19,7 @@ conda activate boltzkit
 
 
 # Project structure
-`boltzkit` broadly separated into the sub-packages:
+`boltzkit` is broadly separated into the sub-packages:
 - `evaluation`
 - `targets`
 - `utils`
@@ -51,7 +51,7 @@ While `evaluation` and `targets` can be used completely indpendently, both depen
 - The returned `metrics` object is a flat `dict` that maps strings to values. Values may be simple `float` or `int` types, but **can also be complex data objects** such as histograms or pdfs. Utilities for filtering and compatibility with Weights and Biases are also available.
 
 ### Domain-independent metrics
-To run the full evaluation pipeline with general (target-domain-independent) metrics, run:
+To run the full evaluation pipeline with general domain-independent metrics, run:
 ```python
 from boltzkit.evaluation import eval
 
@@ -68,7 +68,7 @@ metrics = eval(
 
 ### Include domain-specific metrics
 To incorporate domain specific metrics, such as Ramachandran plots for torsion angle marginals in molecular tasks, you can pass one or multiple `CustomEval` objects.
-For example, to include metrics specific to molecular Boltzmann models, use:
+For example, to include metrics specific to molecular Boltzmann densities, use:
 ```python
 from boltzkit.evaluation import eval
 from boltzkit.evaluation.molecular_eval import MolecularEval
