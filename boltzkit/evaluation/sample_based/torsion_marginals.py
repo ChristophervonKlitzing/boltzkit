@@ -8,15 +8,13 @@ from boltzkit.utils.histogram import (
     get_histogram_1d,
     get_histogram_2d,
 )
+from boltzkit.utils.shape_utils import get_balanced_grid
 from .wasserstein import get_torus_wasserstein as _get_torus_wasserstein
 from matplotlib import pyplot as plt
 
 
-from boltzkit.utils.visualize import (
-    get_balanced_subplot_grid,
-    visualize_histogram_1d,
-    visualize_histogram_2d,
-)
+from boltzkit.utils.histogram import visualize_histogram_1d, visualize_histogram_2d
+
 
 from boltzkit.utils.pdf import PdfBuffer, matplotlib_to_pdf_buffer
 
@@ -173,7 +171,7 @@ def visualize_torsion_marginals_single_type(
     num_hists = len(hists)
 
     if grid_shape is None:
-        n_rows, n_cols = get_balanced_subplot_grid(num_hists)
+        n_rows, n_cols = get_balanced_grid(num_hists)
     else:
         n_rows, n_cols = grid_shape
 
@@ -282,6 +280,8 @@ def visualize_torsion_marginals_all(
 
     if show:
         plt.show()
+    else:
+        plt.close()
 
     return pdf
 
@@ -289,7 +289,7 @@ def visualize_torsion_marginals_all(
 if __name__ == "__main__":
     from boltzkit.targets.boltzmann import MolecularBoltzmann
     from boltzkit.utils.pdf import save_pdf
-    from boltzkit.utils.visualize import (
+    from boltzkit.utils.histogram import (
         visualize_histogram_1d,
         visualize_histogram_2d,
     )

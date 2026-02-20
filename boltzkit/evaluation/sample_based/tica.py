@@ -1,9 +1,12 @@
+from matplotlib import pyplot as plt
 import numpy as np
 import mdtraj as md
 import deeptime as dt
-from boltzkit.utils.histogram import get_histogram_2d
+from boltzkit.utils.histogram import Histogram2D, get_histogram_2d
+from boltzkit.utils.pdf import matplotlib_to_pdf_buffer
 from .wasserstein import get_euclidean_wasserstein_1_2
 from ._tica_help import _tica_features
+from boltzkit.utils.histogram import visualize_histogram_2d
 
 
 def get_tica_projections(
@@ -66,6 +69,54 @@ def get_tica_hist(
     return get_histogram_2d(tica_proj, density=True, **kwargs)
 
 
+def visualize_tica(
+    tica_hist: Histogram2D,
+    plot_as_free_energy: bool,
+    ax: plt.Axes | None = None,
+    show: bool = False,
+):
+    create_ax = ax is None
+    if create_ax:
+        fig, ax = plt.subplots()
+    else:
+        fig = ax.figure
+
+    visualize_histogram_2d(tica_hist, plot_as_free_energy=plot_as_free_energy, ax=ax)
+
+    pdf = matplotlib_to_pdf_buffer(fig)
+
+    if show:
+        plt.show()
+    elif create_ax:
+        plt.close()
+
+    return pdf
+
+
+def visualize_tica_true_and_pred(
+    tica_hist_true: Histogram2D,
+    tica_hist_pred: Histogram2D,
+    plot_as_free_energy: bool = True,
+    show: bool = False,
+):
+    fig, axes = plt.subplots(ncols=2, figsize=(7, 3))
+
+    visualize_tica(tica_hist_true, plot_as_free_energy=plot_as_free_energy, ax=axes[0])
+    axes[0].set_title("True")
+
+    visualize_tica(tica_hist_pred, plot_as_free_energy=plot_as_free_energy, ax=axes[1])
+    axes[1].set_title("Pred")
+
+    pdf = matplotlib_to_pdf_buffer(fig)
+
+    if show:
+        plt.show()
+    else:
+        plt.close()
+
+    return pdf
+
+
 def get_tica_wasserstein_1_2(
     tica_projections_true: np.ndarray,
     tica_projections_pred: np.ndarray,
@@ -103,7 +154,6 @@ def get_tica_wasserstein_1_2(
 
 if __name__ == "__main__":
     from boltzkit.targets.boltzmann import MolecularBoltzmann
-    from boltzkit.utils.visualize import visualize_histogram_2d
 
     bm = MolecularBoltzmann("datasets/chrklitz99/test_system")
 

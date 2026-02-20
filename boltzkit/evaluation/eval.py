@@ -198,13 +198,7 @@ def eval(
     return all_metrics
 
 
-# TODO: Replace by
-# transform_wandb_compatible # result can be logged via wandb.log(...) (drops the histogram raw data)
-# get_histograms # result can be logged separately for custom visualization
-# transform_PDFs # result are high quality visualizations for publications
-
-
-def transform_wandb_compatible(
+def make_wandb_compatible(
     data: dict[str, ValueType],
     dpi: int = 50,
 ):

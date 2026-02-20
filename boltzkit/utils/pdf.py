@@ -1,4 +1,5 @@
 import io
+import math
 import os
 from matplotlib import pyplot as plt
 from dataclasses import dataclass
@@ -65,12 +66,41 @@ def save_pdfs(pdfs: dict[str, PdfBuffer], dirpath: str) -> None:
         save_pdf(pdf_buffer, fpath)
 
 
-def pdf_to_wandb_image(pdf_buffer: PdfBuffer, dpi=50):
-    import wandb
+def pdf_to_pillow_image(pdf_buffer: PdfBuffer, dpi=50):
     from pdf2image import convert_from_bytes
 
     # Convert first page to PIL image
-    images = convert_from_bytes(pdf_buffer.buffer, dpi=dpi)
+    images = convert_from_bytes(pdf_buffer.buffer.getvalue(), dpi=dpi)
     pil_image = images[0]
+    return pil_image
 
+
+def pdf_to_wandb_image(pdf_buffer: PdfBuffer, dpi=50):
+    import wandb
+
+    pil_image = pdf_to_pillow_image(pdf_buffer, dpi=dpi)
     return wandb.Image(pil_image)
+
+
+def plot_pdf(pdf_buffer: PdfBuffer, dpi=500, ax=None, show: bool = False):
+    """
+    This function is mainly for debugging purposes
+    """
+    img = pdf_to_pillow_image(pdf_buffer, dpi=dpi)
+
+    if ax is None:
+        width_px, height_px = img.size
+        ratio = height_px / width_px
+        width = 9
+        height = int(math.ceil(ratio * width))
+        fig, ax = plt.subplots(figsize=(width, height))
+    else:
+        fig = ax.figure
+
+    ax.imshow(img)
+    ax.axis("off")
+    # ax.set_title("PDF Preview")
+    fig.tight_layout()
+
+    if show:
+        plt.show()

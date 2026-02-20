@@ -1,8 +1,11 @@
 from matplotlib import pyplot as plt
 import numpy as np
-from boltzkit.utils.histogram import Histogram1D, get_histogram_1d
+from boltzkit.utils.histogram import (
+    Histogram1D,
+    get_histogram_1d,
+    visualize_histogram_1d as _visualize_hist_1d,
+)
 from boltzkit.utils.pdf import matplotlib_to_pdf_buffer
-from boltzkit.utils.visualize import visualize_histogram_1d as _visualize_hist_1d
 
 
 def get_reduced_energy_hist(
