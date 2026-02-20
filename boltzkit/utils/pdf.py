@@ -88,7 +88,8 @@ def plot_pdf(pdf_buffer: PdfBuffer, dpi=500, ax=None, show: bool = False):
     """
     img = pdf_to_pillow_image(pdf_buffer, dpi=dpi)
 
-    if ax is None:
+    create_ax = ax is None
+    if create_ax:
         width_px, height_px = img.size
         ratio = height_px / width_px
         width = 9
@@ -104,3 +105,5 @@ def plot_pdf(pdf_buffer: PdfBuffer, dpi=500, ax=None, show: bool = False):
 
     if show:
         plt.show()
+    elif create_ax:
+        plt.close()

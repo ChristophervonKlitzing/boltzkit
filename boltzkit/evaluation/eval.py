@@ -233,6 +233,8 @@ def get_pdfs(data: dict[str, ValueType]) -> dict[str, PdfBuffer]:
 
 
 if __name__ == "__main__":
+    from boltzkit.utils.pdf import plot_pdf
+
     rng = np.random.default_rng(seed=42)
 
     # -------------------------
@@ -286,5 +288,10 @@ if __name__ == "__main__":
             print(f"{k:30s}: {v:.6f}")
         else:
             print(f"{k:30s}: {v}")
+
+    pdfs = get_pdfs(metrics)
+    for pdf in pdfs.values():
+        print(pdf)
+        plot_pdf(pdf, show=True)
 
     print("\nDone.")

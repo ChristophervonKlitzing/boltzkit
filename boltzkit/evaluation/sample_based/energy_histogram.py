@@ -120,6 +120,8 @@ def visualize_energy_hist_dual(
 
     if show:
         plt.show()
+    else:
+        plt.close()
 
     return pdf_buffer
 
