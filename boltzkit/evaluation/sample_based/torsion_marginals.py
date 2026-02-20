@@ -286,6 +286,109 @@ def visualize_torsion_marginals_all(
     return pdf
 
 
+def visualize_torsion_marginals_dual(
+    torsion_marginals_true: tuple[
+        list[Histogram2D], list[Histogram1D], list[Histogram1D]
+    ],
+    torsion_marginals_pred: tuple[
+        list[Histogram2D], list[Histogram1D], list[Histogram1D]
+    ],
+    plot_as_free_energy: bool,
+    show: bool = False,
+    **kwargs,
+):
+    assert len(torsion_marginals_true[0]) == len(torsion_marginals_true[1])
+    assert len(torsion_marginals_true[1]) == len(torsion_marginals_true[2])
+
+    assert len(torsion_marginals_pred[0]) == len(torsion_marginals_pred[1])
+    assert len(torsion_marginals_pred[1]) == len(torsion_marginals_pred[2])
+
+    n_pairs = len(torsion_marginals_true[0])
+
+    fig, axes = plt.subplots(n_pairs, 4, squeeze=False, figsize=(13, 3 * n_pairs))
+    for i in range(n_pairs):
+        ax_ram_true: plt.Axes = axes[i, 2]
+        ax_ram_pred: plt.Axes = axes[i, 3]
+        ax_phi: plt.Axes = axes[i, 0]
+        ax_psi: plt.Axes = axes[i, 1]
+
+        h_ram_true = torsion_marginals_true[0][i]
+        h_phi_true = torsion_marginals_true[1][i]
+        h_psi_true = torsion_marginals_true[2][i]
+
+        h_phi_pred = torsion_marginals_pred[1][i]
+        h_ram_pred = torsion_marginals_pred[0][i]
+        h_psi_pred = torsion_marginals_pred[2][i]
+
+        phi_label = f"$\\phi_{i}$"
+        psi_label = f"$\\psi_{i}$"
+
+        visualize_histogram_2d(
+            h_ram_true,
+            plot_as_free_energy=plot_as_free_energy,
+            ax=ax_ram_true,
+            title="True",
+            xlabel=phi_label,
+            ylabel=psi_label,
+            **kwargs,
+        )
+
+        visualize_histogram_2d(
+            h_ram_pred,
+            plot_as_free_energy=plot_as_free_energy,
+            ax=ax_ram_pred,
+            title="Pred",
+            xlabel=phi_label,
+            ylabel=psi_label,
+            **kwargs,
+        )
+
+        visualize_histogram_1d(
+            h_phi_true,
+            plot_as_free_energy=plot_as_free_energy,
+            ax=ax_phi,
+            label="True",
+            xlabel=phi_label,
+            **kwargs,
+        )
+        visualize_histogram_1d(
+            h_phi_pred,
+            plot_as_free_energy=plot_as_free_energy,
+            ax=ax_phi,
+            label="Pred",
+            xlabel=phi_label,
+            **kwargs,
+        )
+
+        visualize_histogram_1d(
+            h_psi_true,
+            plot_as_free_energy=plot_as_free_energy,
+            ax=ax_psi,
+            label="True",
+            xlabel=psi_label,
+            **kwargs,
+            transpose=False,
+        )
+        visualize_histogram_1d(
+            h_psi_pred,
+            plot_as_free_energy=plot_as_free_energy,
+            ax=ax_psi,
+            label="Pred",
+            xlabel=psi_label,
+            **kwargs,
+            transpose=False,
+        )
+
+    pdf = matplotlib_to_pdf_buffer(fig)
+
+    if show:
+        plt.show()
+    else:
+        plt.close()
+
+    return pdf
+
+
 if __name__ == "__main__":
     from boltzkit.targets.boltzmann import MolecularBoltzmann
     from boltzkit.utils.pdf import save_pdf
@@ -301,18 +404,17 @@ if __name__ == "__main__":
     gt_samples = bm.load_dataset(T=300.0, type="val")
 
     angles = get_torsion_angles(gt_samples, topology)
-    a0 = angles[0]
-    a1 = angles[1]
-
-    a0 = np.concatenate([a0, a0], 1)
-    a1 = np.concatenate([a1, a1], 1)
-    angles = (a0, a1)
+    angles2 = get_torsion_angles(
+        gt_samples + 0.1 * np.random.randn(*gt_samples.shape), topology
+    )
 
     torsion_marginals = get_torsion_marginal_hists(*angles)
+    torsion_marginals2 = get_torsion_marginal_hists(*angles2)
     plot_as_free_energy = True
 
-    pdf_buffer = visualize_torsion_marginals_all(
+    pdf_buffer = visualize_torsion_marginals_dual(
         torsion_marginals,
+        torsion_marginals2,
         plot_as_free_energy=plot_as_free_energy,
         show=True,
     )

@@ -137,6 +137,12 @@ target.get_log_prob_and_score(samples)
 target.get_score(samples)
 ```
 
+### Available Boltzmann targets
+- datasets/chrklitz99/test_system
+- TODO: missing alanine  dipeptide (test_system is basically that)
+- datasets/chrklitz99/alanine_tetrapeptide
+- TODO: missing alanine hexapeptide
+- TODO: ELIL tetrapeptide
 
 # Testing
 Before running tests, extra packages must be installed with:
@@ -155,3 +161,14 @@ python -m unittest tests.demo
 
 ## Create unit test
 test files need to start with `test_` to be discoverable.
+
+
+# TODOs:
+- shape issues
+- target log probs optional
+- alle evals in CustomEval Objekten (auch density-based)
+- separate torsion and tica separate objects
+- look into pdf format
+- more angles (potentially requires internal coordinates and z-matrix -> provide numpy implementation of internal coordinates for this)
+- absolute imports everwhere
+- save_pdfs missing extension
