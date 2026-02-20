@@ -118,9 +118,24 @@ save_histograms(hists, dir_path) # uses keys of dict as filenames
 ```
 
 # Create target systems
+## Boltzmann targets
+Boltzmann targets use huggingface and can be instantiated easily via:
+```python 
+from boltzkit.targets.boltzmann import MolecularBoltzmann
 
+target = MolecularBoltzmann("datasets/chrklitz99/test_system")
+```
 
+Some common operations on this target include:
+```python
+val_samples = target.load_dataset(T=300.0, type="val")
+topology = target.get_mdtraj_topology()
+tica_model = target.get_tica_model()
 
+target.get_log_prob(samples)
+target.get_log_prob_and_score(samples)
+target.get_score(samples)
+```
 
 
 # Testing
