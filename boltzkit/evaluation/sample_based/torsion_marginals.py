@@ -298,8 +298,7 @@ if __name__ == "__main__":
 
     topology = bm.get_mdtraj_topology()
 
-    gt_samples_path = bm._repo.load_file("300K_val.npy")
-    gt_samples = np.load(gt_samples_path)  # [:15_000]
+    gt_samples = bm.load_dataset(T=300.0, type="val")
 
     angles = get_torsion_angles(gt_samples, topology)
     a0 = angles[0]

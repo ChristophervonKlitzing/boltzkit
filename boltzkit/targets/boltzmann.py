@@ -1,3 +1,5 @@
+from typing import Literal
+
 import numpy as np
 
 from boltzkit.utils.molecular.conversion import vec3_list_to_numpy
@@ -206,12 +208,25 @@ class MolecularBoltzmann(NumPyTarget):
 
         return tica_model
 
-    def create_internal_coordinate_trafo(self):
-        self.coordinate_trafo_openmm = bg.GlobalInternalCoordinateTransformation(
-            z_matrix=z_matrix,
-            enforce_boundaries=True,
-            normalize_angles=True,
+    def load_dataset(
+        self, T: float | str, type: Literal["train", "val", "test"]
+    ) -> np.ndarray | None:
+        datasets: dict[str, dict[str, str]] | None = self._repo.config.get(
+            "datasets", None
         )
+        if datasets is None:
+            return None
+
+        temp_cfg = datasets.get(str(T), None)
+        if temp_cfg is None:
+            return None
+
+        dataset_remote_fname = temp_cfg.get(type, None)
+        if dataset_remote_fname is None:
+            return None
+
+        local_fname = self._repo.load_file(dataset_remote_fname)
+        return np.load(local_fname)
 
     @property
     def spatial_dim(self) -> int:

@@ -160,8 +160,7 @@ if __name__ == "__main__":
     topology = bm.get_mdtraj_topology()
     tica_model = bm.get_tica_model()
 
-    gt_samples_path = bm._repo.load_file("300K_val.npy")
-    gt_samples = np.load(gt_samples_path)
+    gt_samples = bm.load_dataset(T=300.0, type="val")
 
     tica_proj = get_tica_projections(gt_samples, topology, tica_model)
     tica_hist = get_tica_hist(tica_proj)
