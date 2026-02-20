@@ -14,7 +14,7 @@ class PdfBuffer:
     buffer: io.BytesIO
 
     def __repr__(self):
-        size_bytes = len(self.buffer.getvalue())
+        size_bytes = len(self.buffer.getbuffer())
         # Format nicely
         if size_bytes < 1024:
             size_str = f"{size_bytes} B"
@@ -54,7 +54,7 @@ def save_pdf(obj: PdfBuffer, path: str) -> None:
     Save a pdf in the form of a buffer into a PDF file.
     """
     with open(path, "wb") as f:
-        f.write(obj.buffer.getvalue())
+        f.write(obj.buffer.getbuffer())
 
 
 def save_pdfs(pdfs: dict[str, PdfBuffer], dirpath: str) -> None:
@@ -62,7 +62,7 @@ def save_pdfs(pdfs: dict[str, PdfBuffer], dirpath: str) -> None:
     Save a dict of pdfs into a directory. dir must exist.
     """
     for name, pdf_buffer in pdfs.items():
-        fpath = os.path.join(dirpath, name)
+        fpath = os.path.join(dirpath, name + ".pdf")
         save_pdf(pdf_buffer, fpath)
 
 
