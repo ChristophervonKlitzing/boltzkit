@@ -107,7 +107,7 @@ pdfs = get_pdfs(metrics)
 save_pdfs(pdfs, dir_path) # uses keys of dict as filenames
 ```
 
-## Save histogram raw data (for downstream high quality visualizations)
+## Save histogram raw data (e.g., for potential custom downstram visualizations)
 ```python
 from boltzkit.evaluation import get_histograms
 from boltzkit.utils.histogram import save_histograms
