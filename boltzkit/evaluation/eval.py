@@ -272,6 +272,7 @@ def update_dict_with_id(target: dict, new_data: dict, idx: int) -> dict:
 
 def eval(
     data: EvalData,
+    *,
     evals: list[Evaluation | tuple[Evaluation]] = COMMON_EVALS,
     skip_on_missing_data: bool = True,
 ) -> dict[str, ValueType]:
@@ -370,7 +371,7 @@ if __name__ == "__main__":
     # -------------------------
     # Run evaluation
     # -------------------------
-    metrics = eval(data, COMMON_EVALS)
+    metrics = eval(data)
 
     # -------------------------
     # Print results

@@ -37,50 +37,40 @@ While `evaluation` and `targets` can be used completely indpendently, both depen
 - `tools`: General ready-to-use tools based on the boltzkit package (e.g., MD dataset creation (for molecular systems), dataset-downloader, evaluation-tool based on file inputs, ...). It is not part of the boltzkit package because it contains ready-to-use applications. 
 
 # Evaluation
+The evaluation is modularized. Input is an `EvalData` object with all-optional fields.
 
-## Run evaluation
-
-**Required:** 
-- Evaluation requires ground-truth (`true`) samples and predicted (`pred`) samples. Samples must have shape `(batch, dim)`.
-- Ground-truth density evaluations (`target_log_prob`) are required for both the ground-truth samples and the predicted samples. These density evaluations **may be unnormalized**. Log-probs must have shape `(batch,)`.
-
-**Optional**: 
-- If model density evaluation is available, `model_log_prob` can also be provided for both the ground-truth samples and the predicted samples. The default value is `None`.
+**Input data:** 
+- ground-truth (`true`) samples and predicted (`pred`) samples; must have shape `(batch, dim)`.
+- ground-truth density evaluations (`target_log_prob`), which **may be unnormalized**; must have shape `(batch,)`.
+- model-density evaluations (`model_log_prob`), which **must be normalized**; must have shape `(batch,)`
 
 **Returns:**
 - The returned `metrics` object is a flat `dict` that maps strings to values. Values may be simple `float` or `int` types, but **can also be complex data objects** such as histograms or pdfs. Utilities for filtering and compatibility with Weights and Biases are also available.
 
-### Domain-independent metrics
+### Standard metrics
 To run the full evaluation pipeline with general domain-independent metrics, run:
 ```python
-from boltzkit.evaluation import eval
+from boltzkit.evaluation import eval, EvalData
 
-metrics = eval(
-    samples_true=samples_true, # (batch,dim)
-    samples_pred=samples_pred, # (batch,dim)
-    true_samples_target_log_prob=true_samples_target_log_prob, # (batch,)
-    pred_samples_target_log_prob=pred_samples_target_log_prob, # (batch,)
-    #  ↓↓↓ optional ↓↓↓
-    true_samples_model_log_prob=true_samples_model_log_prob, # (batch,)
-    pred_samples_model_log_prob=pred_samples_model_log_prob, # (batch,)
-)
+# Prepare data
+data = EvalData(...)
+
+metrics = eval(data)
 ```
 
-### Include domain-specific metrics
-To incorporate domain specific metrics, such as Ramachandran plots for torsion angle marginals in molecular tasks, you can pass one or multiple `CustomEval` objects.
-For example, to include metrics specific to molecular Boltzmann densities, use:
+### Overwrite/customize evaluation
+To incorporate custom metrics, such as Ramachandran plots for torsion angle marginals in molecular tasks, you can pass one or multiple `CustomEval` objects.
+For example, to additionally include torsion marginals, use:
 ```python
-from boltzkit.evaluation import eval
-from boltzkit.evaluation.molecular_eval import MolecularEval
+from boltzkit.evaluation import eval, COMMON_EVALS
+from boltzkit.evaluation.molecular_eval import TorsionMarginalEval
 
-# topology & tica_model can optionally be obtained via our `MolecularBoltzmann` target (available under `boltzkit.targets`).
-topology = ... 
+# topology can for example be obtained via our `MolecularBoltzmann` target (available under `boltzkit.targets`).
 tica_model = ...
-
-molecular_eval = MolecularEval(topology, tica_model)
+molecular_eval = TorsionMarginalEval(topology) # also allows configuration of metrics via flags
 metrics = eval(
-    ...,
-    custom_evals=[molecular_eval]
+    data,
+    evals=COMMON_EVALS + [molecular_eval]
 )
 ```
 
