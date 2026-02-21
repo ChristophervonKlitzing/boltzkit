@@ -163,6 +163,4 @@ test files need to start with `test_` to be discoverable.
 
 
 # TODOs:
-- shape issues (should be solved)
 - more angles (potentially requires internal coordinates and z-matrix -> provide numpy implementation of internal coordinates for this)
-- absolute imports everwhere

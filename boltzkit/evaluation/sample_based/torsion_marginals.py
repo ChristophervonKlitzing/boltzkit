@@ -297,6 +297,7 @@ def visualize_torsion_marginals_dual(
     ],
     plot_as_free_energy: bool,
     show: bool = False,
+    cmap: str | None = None,
     **kwargs,
 ):
     assert len(torsion_marginals_true[0]) == len(torsion_marginals_true[1])
@@ -332,6 +333,7 @@ def visualize_torsion_marginals_dual(
             title="True",
             xlabel=phi_label,
             ylabel=psi_label,
+            cmap=cmap,
             **kwargs,
         )
 
@@ -342,6 +344,7 @@ def visualize_torsion_marginals_dual(
             title="Pred",
             xlabel=phi_label,
             ylabel=psi_label,
+            cmap=cmap,
             **kwargs,
         )
 
