@@ -42,7 +42,7 @@ class EvalData:
 
     # This is used internally to provide better error messages
     _restricted_access: bool = False
-    _eval_name: str | None = None
+    _eval_cls: Optional["Evaluation"] = None
 
     samples_true: Optional[np.ndarray] = None
     samples_pred: Optional[np.ndarray] = None
@@ -120,16 +120,18 @@ class EvalData:
         required_fields = {k: populated_fields[k] for k in requirements}
         return required_fields
 
-    def copy_required(self, requirements: list[str], eval_name: str):
+    def copy_required(self, requirements: list[str], eval_cls: type["Evaluation"]):
         required_fields = self.get_required_fields(requirements)
-        data = EvalData(**required_fields, _eval_name=eval_name)
+        data = EvalData(**required_fields, _eval_cls=eval_cls)
         data._restricted_access = True
         return data
 
     def __getattribute__(self, name):
         # Prevent access to attributes not listed in the requirements.
         # This avoids subtle bugs and makes dependencies explicit.
+
         restricted_access = object.__getattribute__(self, "_restricted_access")
+
         if restricted_access:
             try:
                 value = object.__getattribute__(self, name)
@@ -137,9 +139,16 @@ class EvalData:
                 raise
 
             if value is None:
-                raise AttributeError(
-                    f"The attribute '{name}' requested by '{self._eval_name}' is likely not included in the requirements list of class '{self._eval_name}'. The attribute '{name}' cannot be accessed while the data object is in restricted access mode."
-                )
+                eval_cls: Evaluation = object.__getattribute__(self, "_eval_cls")
+                eval_cls_name = eval_cls.__name__
+                requirements = eval_cls.requirements
+
+                if name not in requirements:
+                    raise AttributeError(
+                        f"The attribute '{name}' was requested by '{eval_cls_name}' without being an explicit requirement, which is not allowed in restricted access mode. Consider adding '{name}' to '{eval_cls_name}.requirements'."
+                    )
+                else:
+                    raise AttributeError("Something went fatally wrong")
 
         # IMPORTANT: delegate to the base implementation
         return super().__getattribute__(name)
@@ -179,7 +188,7 @@ class Evaluation(ABC):
 
         # prevent access to attribute that are not explicitely required.
         # This avoids subtle bugs and makes dependencies explicit.
-        safe_data = data.copy_required(self.requirements, type(self).__name__)
+        safe_data = data.copy_required(self.requirements, type(self))
         return self._eval(safe_data)
 
 
