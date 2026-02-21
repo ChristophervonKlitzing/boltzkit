@@ -1,8 +1,10 @@
 # orchestrator for running the sample- and energy-based evaluation
 
-from abc import ABC
+from abc import ABC, abstractmethod
 from collections.abc import Iterable, Mapping
-from typing import Any
+from dataclasses import dataclass, fields, asdict
+from typing import Any, Literal, Optional, Sequence, TypeAlias
+import warnings
 import numpy as np
 
 from boltzkit.evaluation.density_based.divergence import (
@@ -10,6 +12,7 @@ from boltzkit.evaluation.density_based.divergence import (
     get_reverse_logZ,
 )
 from boltzkit.evaluation.density_based.entropy import get_shannon_entropy
+from boltzkit.evaluation.density_based.ess import get_reverse_ess
 from boltzkit.evaluation.density_based.evidence import get_eubo, get_nll
 from boltzkit.evaluation.sample_based.energy_histogram import (
     get_reduced_energy_hist,
@@ -24,176 +27,265 @@ from boltzkit.utils.shape_utils import squeeze_last_dim
 ValueType = float | int | PdfBuffer | Histogram1D | Histogram2D | Any
 
 
-class CustomEval(ABC):
+EvalField: TypeAlias = Literal[
+    "samples_true",
+    "samples_pred",
+    "true_samples_target_log_prob",
+    "pred_samples_target_log_prob",
+    "true_samples_model_log_prob",
+    "pred_samples_model_log_prob",
+]
+
+
+@dataclass
+class EvalData:
+    """Container for all possible evaluation inputs."""
+
+    samples_true: Optional[np.ndarray] = None
+    samples_pred: Optional[np.ndarray] = None
+    true_samples_target_log_prob: Optional[np.ndarray] = None
+    pred_samples_target_log_prob: Optional[np.ndarray] = None
+    true_samples_model_log_prob: Optional[np.ndarray] = None
+    pred_samples_model_log_prob: Optional[np.ndarray] = None
+
+    def fits_requirements(self, requirements: list[EvalField]) -> bool:
+        return len(self.get_missing_requirements(requirements)) == 0
+
+    def get_missing_requirements(
+        self, requirements: list[EvalField]
+    ) -> list[EvalField]:
+        return [r for r in requirements if getattr(self, r, None) is None]
+
+    def __post_init__(self):
+        populated_fields = self._get_populated_fields()
+
+        # Remove potential single trailing ones in the fields
+        for k, v in populated_fields.items():
+            if "log_prob" in k:
+                setattr(self, k, squeeze_last_dim(v))
+
+        self._check_same_batch_size(populated_fields)
+        self._check_sample_shapes(populated_fields)
+
+    def _get_populated_fields(self) -> dict[str, np.ndarray]:
+        return {k: v for k, v in asdict(self).items() if v is not None}
+
+    def _check_same_batch_size(self, populated_fields: dict[str, np.ndarray]):
+        batch_sizes = {k: v.shape[0] for k, v in populated_fields.items()}
+        if len(set(batch_sizes.values())) != 1:
+            raise ValueError("... use keys and actual batch-sizes")
+
+    def _check_sample_shapes(self, populated_fields: dict[str, np.ndarray]):
+        sample_shapes = {
+            k: v.shape for k, v in populated_fields.items() if "log_prob" not in k
+        }
+        if not all([len(shape) == 2 for shape in sample_shapes.values()]):
+            invalid = {k: s for k, s in sample_shapes.items() if len(s) != 2}
+            raise ValueError(
+                f"All sample arrays must be 2D (batch_size, dim). "
+                f"Found invalid shapes: {invalid}"
+            )
+
+        if len(set([shape[1] for shape in sample_shapes.values()])) != 1:
+            raise ValueError(
+                f"Dimension mismatch: All samples must have the same dimension (index 1). "
+                f"Detected dimensions at index 1: { {k: s[1] for k, s in sample_shapes.items()} }"
+            )
+
+
+class Evaluation(ABC):
+    requirements: list[EvalField] = []
+
     def __init__(self):
         super().__init__()
+        # Verify that all requirements are actually valid keys in the dataclass
+        valid_fields = {f.name for f in fields(EvalData)}
+        if not set(self.requirements).issubset(valid_fields):
+            raise TypeError(f"Invalid requirement in {self.__class__.__name__}")
 
-    def __call__(
-        self,
-        samples_true: np.ndarray,
-        samples_pred: np.ndarray,
-        true_samples_target_log_prob: np.ndarray,
-        pred_samples_target_log_prob: np.ndarray,
-        true_samples_model_log_prob: np.ndarray | None = None,
-        pred_samples_model_log_prob: np.ndarray | None = None,
-    ) -> dict[str, ValueType]:
+    @abstractmethod
+    def _eval(self, data: EvalData) -> dict[str, ValueType]:
         raise NotImplementedError
+
+    def eval(self, data: EvalData, skip_on_missing_data: bool = False):
+        missing = data.get_missing_requirements(self.requirements)
+        if missing:
+            if skip_on_missing_data:
+                infill = "this field is" if len(missing) == 1 else "these fields are"
+                warnings.warn(
+                    f"Evaluation Skipped: '{self.__class__.__name__}' requires [{', '.join(missing)}], "
+                    f"but {infill} missing from the provided EvalData.",
+                    UserWarning,
+                    stacklevel=2,
+                )
+                return None
+            else:
+                raise ValueError(
+                    f"Evaluation failed: {self.__class__.__name__} requires the following "
+                    f"fields to be populated, but they are currently None: {', '.join(missing)}."
+                )
+        return self._eval(data)
+
+
+class EnergyHistEval(Evaluation):
+    requirements = ["true_samples_target_log_prob", "pred_samples_target_log_prob"]
+
+    def __init__(
+        self,
+        include_pdf: bool = True,
+        include_pred_histogram: bool = True,
+        include_true_histogram: bool = True,
+    ):
+        super().__init__()
+        self.include_pdf = include_pdf
+        self.include_pred_histogram = include_pred_histogram
+        self.include_true_histogram = include_true_histogram
+
+    def _eval(self, data):
+        metrics = {}
+
+        pred_energy_hist = get_reduced_energy_hist(data.pred_samples_target_log_prob)
+        true_energy_hist = get_reduced_energy_hist(data.true_samples_target_log_prob)
+
+        if self.include_pred_histogram:
+            metrics["pred_energy_hist"] = pred_energy_hist
+            metrics["true_energy_hist"] = true_energy_hist
+
+        if self.include_pdf:
+            energy_hist_pdf = visualize_energy_hist_dual(
+                pred_energy_hist=pred_energy_hist, true_energy_hist=true_energy_hist
+            )
+            metrics["energy_hist_pdf"] = energy_hist_pdf
+
+        return metrics
+
+
+class NllEval(Evaluation):
+    requirements = ["true_samples_model_log_prob"]
+
+    def _eval(self, data):
+        nll = get_nll(data.true_samples_model_log_prob)
+        return {"NLL": nll}
+
+
+class ModelShannonEntropyEval(Evaluation):
+    requirements = ["pred_samples_model_log_prob"]
+
+    def _eval(self, data):
+        entropy = get_shannon_entropy(data.pred_samples_model_log_prob)
+        return {"model_shannon_entropy": entropy}
+
+
+class ReverseLogWeightsEval(Evaluation):
+    requirements = ["pred_samples_target_log_prob", "pred_samples_model_log_prob"]
+
+    def __init__(
+        self,
+        include_logZ: bool = True,
+        include_ess: bool = True,
+        include_iw_kl: bool = True,
+    ):
+        super().__init__()
+        self.include_logZ = include_logZ
+        self.include_ess = include_ess
+        self.include_iw_kl = include_iw_kl
+
+    def _eval(self, data):
+        metrics = {}
+        rev_log_iw = (
+            data.pred_samples_target_log_prob - data.pred_samples_model_log_prob
+        )
+        rev_logZ = get_reverse_logZ(rev_log_iw)
+
+        if self.include_logZ:
+            metrics["rev_logZ"] = rev_logZ
+
+        if self.include_iw_kl:
+            metrics["iw_fwd_kl"] = get_kl_divergence_q(rev_log_iw, logZ=rev_logZ)
+
+        if self.include_ess:
+            metrics["reverse_ess"] = get_reverse_ess(rev_log_iw)
+
+        return metrics
+
+
+COMMON_EVALS = [
+    EnergyHistEval(),
+    NllEval(),
+    ModelShannonEntropyEval(),
+    ReverseLogWeightsEval(),
+]
 
 
 def _to_list(
-    obj: CustomEval | Iterable[CustomEval] | None,
-) -> list[tuple[str, CustomEval]]:
-    result = None
+    obj: (
+        list[Evaluation | tuple[Evaluation, str]] | Evaluation | tuple[Evaluation, str]
+    ),
+) -> list[tuple[Evaluation, str | None]]:
+    if isinstance(obj, Evaluation):
+        l = [(obj, None)]
+        return l
 
-    if obj is None:
-        result = []
+    if isinstance(obj, tuple):
+        l = [obj]
+        return l
 
-    if isinstance(obj, CustomEval):
-        result = ["", obj]
-
-    if isinstance(obj, Mapping):
-        result = [(str(k), v) for k, v in obj.items()]
-
-    if isinstance(obj, Iterable):
-        result = [("", o) for o in obj]
-
-    for _, val in result:
-        if not isinstance(val, CustomEval):
-            raise TypeError("Iterable must contain only CustomEval objects")
-
-    if result is None:
-        raise TypeError("Expected CustomEval, Iterable[CustomEval], or None")
-
-    return result
+    l = []
+    for o in obj:
+        if isinstance(o, Evaluation):
+            l.append((o, None))
+        elif isinstance(o, tuple):
+            l.append(o)
+        else:
+            raise ValueError(f"Invalid evaluation object of type '{type(o).__name__}'")
+    return l
 
 
-def _prefix_dict(metrics: dict[str, ValueType], prefix: str):
-    return {(k + prefix): v for k, v in metrics.items()}
-
-
-def eval_sample_based(
-    samples_true: np.ndarray,
-    samples_pred: np.ndarray,
-    true_samples_target_log_prob: np.ndarray,
-    pred_samples_target_log_prob: np.ndarray,
-):
-    pred_energy_hist = get_reduced_energy_hist(pred_samples_target_log_prob)
-    true_energy_hist = get_reduced_energy_hist(true_samples_target_log_prob)
-    energy_hist_pdf = visualize_energy_hist_dual(
-        pred_energy_hist=pred_energy_hist, true_energy_hist=true_energy_hist
-    )
-    return {
-        "pred_energy_hist": pred_energy_hist,
-        "true_energy_hist": true_energy_hist,
-        "energy_hist_vis": energy_hist_pdf,
-    }
-
-
-def eval_density_based(
-    true_samples_target_log_prob: np.ndarray,
-    pred_samples_target_log_prob: np.ndarray,
-    true_samples_model_log_prob: np.ndarray | None = None,
-    pred_samples_model_log_prob: np.ndarray | None = None,
-):
-    if pred_samples_model_log_prob is not None:
-        rev_log_iw = pred_samples_target_log_prob - pred_samples_model_log_prob
+def _prefix_dict(metrics: dict[str, ValueType], prefix: str | None):
+    if prefix:  # None or empty string
+        prefix = prefix + "/"
     else:
-        rev_log_iw = None
+        prefix = ""
 
-    if true_samples_model_log_prob is not None:
-        fwd_log_iw = true_samples_target_log_prob - true_samples_model_log_prob
-    else:
-        fwd_log_iw = None
+    return {(prefix + k): v for k, v in metrics.items()}
 
-    metrics = {}
 
-    if rev_log_iw is not None:
-        rev_logZ = get_reverse_logZ(rev_log_iw)
-        metrics["rev_logZ"] = rev_logZ
-        metrics["iw_fwd_kl"] = get_kl_divergence_q(rev_log_iw, logZ=rev_logZ)
+def update_dict_with_id(target: dict, new_data: dict, idx: int) -> dict:
+    """
+    Update `target` with `new_data`.
+    If a key already exists in `target`, append `unique_id` to the key.
+    """
+    for key, value in new_data.items():
+        if key in target:
+            new_key = f"{key}_eval_idx_{idx}"
+            # Ensure uniqueness even if that key also exists
+            i = 1
+            while new_key in target:
+                new_key = f"{key}_eval_idx_{idx}_{i}"
+                i += 1
+            target[new_key] = value
+        else:
+            target[key] = value
 
-    if pred_samples_model_log_prob is not None:
-        metrics["model_shannon_entropy"] = get_shannon_entropy(
-            pred_samples_model_log_prob
-        )
-
-    if fwd_log_iw is not None:
-        metrics["EUBO"] = get_eubo(fwd_log_iw)
-        metrics["NLL"] = get_nll(true_samples_model_log_prob)
-
-    return metrics
+    return target
 
 
 def eval(
-    samples_true: np.ndarray,
-    samples_pred: np.ndarray,
-    true_samples_target_log_prob: np.ndarray,
-    pred_samples_target_log_prob: np.ndarray,
-    true_samples_model_log_prob: np.ndarray | None = None,
-    pred_samples_model_log_prob: np.ndarray | None = None,
-    custom_evals: Iterable[CustomEval] | CustomEval | None = None,
+    data: EvalData,
+    evals: list[Evaluation | tuple[Evaluation]] = COMMON_EVALS,
+    skip_on_missing_data: bool = True,
 ) -> dict[str, ValueType]:
-    # ========== Check sample shape =========
-    assert len(samples_true.shape) == 2
-    sample_shape = samples_true.shape
-    assert samples_pred.shape == sample_shape
-
-    # === Check if batch-size is the same ===
-    batch_size = sample_shape[0]
-
-    true_samples_target_log_prob = squeeze_last_dim(true_samples_target_log_prob)
-    assert true_samples_target_log_prob.shape[0] == batch_size
-
-    pred_samples_target_log_prob = squeeze_last_dim(pred_samples_target_log_prob)
-    assert pred_samples_target_log_prob.shape[0] == batch_size
-
-    if true_samples_model_log_prob is not None:
-        true_samples_model_log_prob = squeeze_last_dim(true_samples_model_log_prob)
-        assert true_samples_model_log_prob.shape[0] == batch_size
-
-    if pred_samples_model_log_prob is not None:
-        pred_samples_model_log_prob = squeeze_last_dim(pred_samples_model_log_prob)
-        assert pred_samples_model_log_prob.shape[0] == batch_size
-
-    # =======================================
+    eval_list = _to_list(evals)
 
     all_metrics = {}
 
-    # Density-based metrics (e.g., reverse ESS, NLL, ...)
-    density_based = (
-        true_samples_model_log_prob is not None
-        or pred_samples_model_log_prob is not None
-    )
-    if density_based:
-        density_based_metrics = eval_density_based(
-            true_samples_target_log_prob=true_samples_target_log_prob,
-            pred_samples_target_log_prob=pred_samples_target_log_prob,
-            true_samples_model_log_prob=true_samples_model_log_prob,
-            pred_samples_model_log_prob=pred_samples_model_log_prob,
-        )
-    else:
-        density_based_metrics = {}
-    all_metrics.update(density_based_metrics)
+    for i, (eval, prefix) in enumerate(eval_list):
+        metrics = eval.eval(data, skip_on_missing_data=skip_on_missing_data)
+        if metrics is None:
+            continue
+        metrics = _prefix_dict(metrics, prefix)
 
-    # Sample-based metrics (energy histogram, ...) that are not target specific
-    sample_based_general_metrics = eval_sample_based(
-        samples_true=samples_true,
-        samples_pred=samples_pred,
-        true_samples_target_log_prob=true_samples_target_log_prob,
-        pred_samples_target_log_prob=pred_samples_target_log_prob,
-    )
-    all_metrics.update(sample_based_general_metrics)
-
-    # Custom, e.g., target-specific like TICA plots, torsion marginals, inter-atomic distance histograms, ...
-    eval_list = _to_list(custom_evals)
-    for prefix, eval in eval_list:
-        custom_metrics = eval(
-            samples_true=samples_true,
-            samples_pred=samples_pred,
-            true_samples_target_log_prob=true_samples_target_log_prob,
-        )
-        custom_metrics = _prefix_dict(custom_metrics, prefix)
-        all_metrics.update(custom_metrics)
+        update_dict_with_id(all_metrics, metrics, i)
 
     return all_metrics
 
@@ -266,10 +358,7 @@ if __name__ == "__main__":
         ((samples_pred - pred_mean) / pred_scale) ** 2, axis=1
     )
 
-    # -------------------------
-    # Run evaluation
-    # -------------------------
-    metrics = eval(
+    data = EvalData(
         samples_true=samples_true,
         samples_pred=samples_pred,
         true_samples_target_log_prob=true_samples_target_log_prob,
@@ -277,6 +366,11 @@ if __name__ == "__main__":
         true_samples_model_log_prob=true_samples_model_log_prob,
         pred_samples_model_log_prob=pred_samples_model_log_prob,
     )
+
+    # -------------------------
+    # Run evaluation
+    # -------------------------
+    metrics = eval(data, COMMON_EVALS)
 
     # -------------------------
     # Print results

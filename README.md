@@ -164,11 +164,6 @@ test files need to start with `test_` to be discoverable.
 
 
 # TODOs:
-- shape issues
-- target log probs optional
-- alle evals in CustomEval Objekten (auch density-based)
-- separate torsion and tica separate objects
-- look into pdf format
+- shape issues (should be solved)
 - more angles (potentially requires internal coordinates and z-matrix -> provide numpy implementation of internal coordinates for this)
 - absolute imports everwhere
-- save_pdfs missing extension
