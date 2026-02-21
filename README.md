@@ -39,7 +39,7 @@ While `evaluation` and `targets` can be used completely indpendently, both depen
 # Evaluation
 The evaluation is modularized. Input is an `EvalData` object with all-optional fields.
 
-**Input data:** 
+**Naming convention:** 
 - ground-truth (`true`) samples and predicted (`pred`) samples; must have shape `(batch, dim)`.
 - ground-truth density evaluations (`target_log_prob`), which **may be unnormalized**; must have shape `(batch,)`.
 - model-density evaluations (`model_log_prob`), which **must be normalized**; must have shape `(batch,)`
@@ -58,21 +58,30 @@ data = EvalData(...)
 metrics = eval(data)
 ```
 
-### Overwrite/customize evaluation
-To incorporate custom metrics, such as Ramachandran plots for torsion angle marginals in molecular tasks, you can pass one or multiple `CustomEval` objects.
+### Custom metrics
+To incorporate custom metrics, such as Ramachandran plots for torsion angle marginals in molecular tasks, you can pass one or multiple `Evaluation` objects.
 For example, to additionally include torsion marginals, use:
 ```python
 from boltzkit.evaluation import eval, COMMON_EVALS
 from boltzkit.evaluation.molecular_eval import TorsionMarginalEval
 
 # topology can for example be obtained via our `MolecularBoltzmann` target (available under `boltzkit.targets`).
-tica_model = ...
+topology = ...
 molecular_eval = TorsionMarginalEval(topology) # also allows configuration of metrics via flags
+
 metrics = eval(
     data,
     evals=COMMON_EVALS + [molecular_eval]
 )
 ```
+
+### Additional info
+By default, an `Evaluation` is skipped with a warning if the provided `data` object does not contain all required fields.
+This behavior can be disabled by setting:
+```python
+metrics = eval(data, skip_on_missing_data=False)
+```
+When `skip_on_missing_data` is set to `False`, a `ValueError` is raised if any required fields are missing for one of the `Evaluation` modules.
 
 
 ## Log to Weights & Biases
