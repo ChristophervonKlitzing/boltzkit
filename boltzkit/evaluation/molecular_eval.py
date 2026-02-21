@@ -161,7 +161,7 @@ if __name__ == "__main__":
     topology = bm.get_mdtraj_topology()
     tica_model = bm.get_tica_model()
 
-    gt_samples = bm.load_dataset(T=300.0, type="val")  # [:10_000]
+    gt_samples = bm.load_dataset(T=300.0, type="val")[:1_000]
     gt_samples = gt_samples.reshape(gt_samples.shape[0], -1)
     pred_samples = gt_samples + 0.1 * np.random.randn(*gt_samples.shape)
     eval_data = EvalData(samples_true=gt_samples, samples_pred=pred_samples)

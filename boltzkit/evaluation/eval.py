@@ -1,9 +1,8 @@
 # orchestrator for running the sample- and energy-based evaluation
 
 from abc import ABC, abstractmethod
-from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, fields, asdict
-from typing import Any, Literal, Optional, Sequence, TypeAlias
+from typing import Any, Literal, Optional, TypeAlias
 import warnings
 import numpy as np
 
@@ -13,7 +12,7 @@ from boltzkit.evaluation.density_based.divergence import (
 )
 from boltzkit.evaluation.density_based.entropy import get_shannon_entropy
 from boltzkit.evaluation.density_based.ess import get_reverse_ess
-from boltzkit.evaluation.density_based.evidence import get_eubo, get_nll
+from boltzkit.evaluation.density_based.evidence import get_nll
 from boltzkit.evaluation.sample_based.energy_histogram import (
     get_reduced_energy_hist,
     visualize_energy_hist_dual,
@@ -41,6 +40,10 @@ EvalField: TypeAlias = Literal[
 class EvalData:
     """Container for all possible evaluation inputs."""
 
+    # This is used internally to provide better error messages
+    _restricted_access: bool = False
+    _eval_name: str | None = None
+
     samples_true: Optional[np.ndarray] = None
     samples_pred: Optional[np.ndarray] = None
     true_samples_target_log_prob: Optional[np.ndarray] = None
@@ -64,11 +67,29 @@ class EvalData:
             if "log_prob" in k:
                 setattr(self, k, squeeze_last_dim(v))
 
+        self._check_type(populated_fields)
         self._check_same_batch_size(populated_fields)
         self._check_sample_shapes(populated_fields)
 
     def _get_populated_fields(self) -> dict[str, np.ndarray]:
-        return {k: v for k, v in asdict(self).items() if v is not None}
+        return {
+            k: v
+            for k, v in asdict(self).items()
+            if v is not None
+            if not k.startswith("_")
+        }
+
+    def _check_type(self, populated_fields: dict[str, np.ndarray]):
+        invalid = [
+            f"{k}: {type(v).__name__}"
+            for k, v in populated_fields.items()
+            if not isinstance(v, np.ndarray)
+        ]
+
+        if invalid:
+            raise TypeError(
+                f"The following fields must be np.ndarray but are not: {invalid}"
+            )
 
     def _check_same_batch_size(self, populated_fields: dict[str, np.ndarray]):
         batch_sizes = {k: v.shape[0] for k, v in populated_fields.items()}
@@ -86,11 +107,42 @@ class EvalData:
                 f"Found invalid shapes: {invalid}"
             )
 
-        if len(set([shape[1] for shape in sample_shapes.values()])) != 1:
+        cond1 = len(sample_shapes) > 0
+        cond2 = len(set([shape[1] for shape in sample_shapes.values()])) != 1
+        if cond1 and cond2:
             raise ValueError(
                 f"Dimension mismatch: All samples must have the same dimension (index 1). "
                 f"Detected dimensions at index 1: { {k: s[1] for k, s in sample_shapes.items()} }"
             )
+
+    def get_required_fields(self, requirements: list[str]):
+        populated_fields = self._get_populated_fields()
+        required_fields = {k: populated_fields[k] for k in requirements}
+        return required_fields
+
+    def copy_required(self, requirements: list[str], eval_name: str):
+        required_fields = self.get_required_fields(requirements)
+        data = EvalData(**required_fields, _eval_name=eval_name)
+        data._restricted_access = True
+        return data
+
+    def __getattribute__(self, name):
+        # Prevent access to attributes not listed in the requirements.
+        # This avoids subtle bugs and makes dependencies explicit.
+        restricted_access = object.__getattribute__(self, "_restricted_access")
+        if restricted_access:
+            try:
+                value = object.__getattribute__(self, name)
+            except AttributeError:
+                raise
+
+            if value is None:
+                raise AttributeError(
+                    f"The attribute '{name}' requested by '{self._eval_name}' is likely not included in the requirements list of class '{self._eval_name}'. The attribute '{name}' cannot be accessed while the data object is in restricted access mode."
+                )
+
+        # IMPORTANT: delegate to the base implementation
+        return super().__getattribute__(name)
 
 
 class Evaluation(ABC):
@@ -124,7 +176,11 @@ class Evaluation(ABC):
                     f"Evaluation failed: {self.__class__.__name__} requires the following "
                     f"fields to be populated, but they are currently None: {', '.join(missing)}."
                 )
-        return self._eval(data)
+
+        # prevent access to attribute that are not explicitely required.
+        # This avoids subtle bugs and makes dependencies explicit.
+        safe_data = data.copy_required(self.requirements, type(self).__name__)
+        return self._eval(safe_data)
 
 
 class EnergyHistEval(Evaluation):
