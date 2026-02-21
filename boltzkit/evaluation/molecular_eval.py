@@ -10,7 +10,7 @@ from boltzkit.evaluation.sample_based.tica import (
 )
 from boltzkit.utils.histogram import Histogram1D, Histogram2D
 
-from .eval import Evaluation
+from boltzkit.evaluation.eval import Evaluation
 import mdtraj as md
 import numpy as np
 
@@ -152,9 +152,9 @@ class TicaEval(Evaluation):
 
 if __name__ == "__main__":
     from boltzkit.targets.boltzmann import MolecularBoltzmann
-    from . import get_pdfs
     from boltzkit.utils.pdf import plot_pdf
     from boltzkit.evaluation.eval import EvalData
+    from boltzkit.evaluation.eval import get_pdfs
 
     bm = MolecularBoltzmann("datasets/chrklitz99/alanine_tetrapeptide")
 

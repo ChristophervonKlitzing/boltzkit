@@ -9,7 +9,9 @@ from boltzkit.utils.histogram import (
     get_histogram_2d,
 )
 from boltzkit.utils.shape_utils import get_balanced_grid
-from .wasserstein import get_torus_wasserstein as _get_torus_wasserstein
+from boltzkit.evaluation.sample_based.wasserstein import (
+    get_torus_wasserstein as _get_torus_wasserstein,
+)
 from matplotlib import pyplot as plt
 
 

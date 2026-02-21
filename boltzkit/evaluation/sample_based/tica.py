@@ -4,8 +4,8 @@ import mdtraj as md
 import deeptime as dt
 from boltzkit.utils.histogram import Histogram2D, get_histogram_2d
 from boltzkit.utils.pdf import matplotlib_to_pdf_buffer
-from .wasserstein import get_euclidean_wasserstein_1_2
-from ._tica_help import _tica_features
+from boltzkit.evaluation.sample_based.wasserstein import get_euclidean_wasserstein_1_2
+from boltzkit.evaluation.sample_based._tica_help import _tica_features
 from boltzkit.utils.histogram import visualize_histogram_2d
 
 

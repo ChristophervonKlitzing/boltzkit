@@ -3,8 +3,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 import numpy as np
 
-from .pdf import matplotlib_to_pdf_buffer
-from .molecular.conversion import to_free_energy
+from boltzkit.utils.pdf import matplotlib_to_pdf_buffer
+from boltzkit.utils.molecular.conversion import to_free_energy
 
 
 class Histogram1D:

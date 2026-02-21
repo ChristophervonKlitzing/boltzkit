@@ -10,7 +10,7 @@ import numpy as np
 import openmm as mm
 from openmm import unit, app
 import atexit
-from .conversion import vec3_list_to_numpy
+from boltzkit.utils.molecular.conversion import vec3_list_to_numpy
 
 import multiprocessing as mp
 

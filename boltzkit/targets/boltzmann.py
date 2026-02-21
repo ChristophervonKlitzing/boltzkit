@@ -5,7 +5,7 @@ import numpy as np
 from boltzkit.utils.molecular.conversion import vec3_list_to_numpy
 
 
-from .base import NumPyTarget
+from boltzkit.targets.base import NumPyTarget
 
 from boltzkit.utils.cached_repo import CachedRepo
 from boltzkit.utils.molecular.energy_eval import (
