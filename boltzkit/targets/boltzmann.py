@@ -67,12 +67,14 @@ class MolecularBoltzmann(NumPyTarget):
             )
 
         pdb_file_path = self._repo.load_file(pdb_file)
-        forcefield = self._repo.config.get("forcefield", "amber14-all.xml")
+        forcefields = self._repo.config.get(
+            "forcefields", ["amber99sbildn.xml", "amber99_obc.xml"]
+        )
         system_args = self._repo.config.get("system_args", {})
 
         # Create system
         self._pdb = app.PDBFile(pdb_file_path.absolute().as_posix())
-        self._forcefield = app.ForceField(forcefield)
+        self._forcefield = app.ForceField(*forcefields)
         self._system: mm.System = self._forcefield.createSystem(
             self._pdb.topology, **system_args
         )

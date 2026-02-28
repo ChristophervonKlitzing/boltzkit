@@ -127,19 +127,26 @@ def visualize_energy_hist_dual(
 
 
 if __name__ == "__main__":
+    from boltzkit.targets.boltzmann import MolecularBoltzmann
 
-    # Generate 1D Gaussian samples
-    rng = np.random.default_rng(seed=42)
+    bm = MolecularBoltzmann("datasets/chrklitz99/test_system")
 
-    # dummy log probs
-    log_probs = rng.normal(loc=0.0, scale=1.0, size=100_000)
-    log_probs2 = rng.normal(loc=1.0, scale=1.3, size=100_000)
+    gt_samples = bm.load_dataset(T=300.0, type="val")[:50_000]
+
+    # convert to Angstrom
+    gt_samples = np.reshape(gt_samples, (gt_samples.shape[0], -1)) * 0.1
+
+    log_probs_true = bm.get_log_prob(gt_samples)
+
+    log_probs_pred = log_probs_true + np.random.normal(
+        loc=0.0, scale=1.0, size=log_probs_true.shape
+    )
 
     # Test with extreme outliers
-    log_probs[0] = -1e8
-    log_probs[2] = 1e8
+    log_probs_true[0] = -1e8
+    log_probs_true[2] = 1e8
 
     # Compute reduced energy histogram using quantile selection
-    energy_hist = get_reduced_energy_hist(log_probs=log_probs)
-    energy_hist2 = get_reduced_energy_hist(log_probs=log_probs2)
+    energy_hist = get_reduced_energy_hist(log_probs=log_probs_true)
+    energy_hist2 = get_reduced_energy_hist(log_probs=log_probs_pred)
     visualize_energy_hist_dual(energy_hist, energy_hist2, show=True)
