@@ -84,7 +84,7 @@ def get_bond_angles(
     return md.compute_angles(traj_samples, angle_indices=bond_angle_triplets)
 
 
-def get_dihedrals_angles(
+def get_dihedral_angles(
     samples: np.ndarray,
     topology: md.Topology,
     z_matrix: list[tuple[int, int, int, int]],

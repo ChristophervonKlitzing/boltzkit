@@ -1,6 +1,7 @@
 from boltzkit.evaluation.sample_based.internal_coordinate_eval import (
     get_bond_angle_hist,
     get_bond_length_hist,
+    get_dihedral_angle_hist,
 )
 from boltzkit.evaluation.sample_based.torsion_marginals import (
     get_torsion_angles,
@@ -20,7 +21,11 @@ from boltzkit.utils.histogram import (
     visualize_histogram_1d,
     visualize_histograms,
 )
-from boltzkit.utils.molecular.marginals import get_bond_angles, get_bond_lengths
+from boltzkit.utils.molecular.marginals import (
+    get_bond_angles,
+    get_bond_lengths,
+    get_dihedral_angles,
+)
 
 
 from boltzkit.evaluation.eval import Evaluation, EvalData
@@ -148,6 +153,9 @@ class InternalCoordinateEval(Evaluation):
         if self.eval_bond_angles:
             metrics.update(self._eval_bond_angles(data))
 
+        if self.eval_dihedral_angles:
+            metrics.update(self._eval_dihedral_angles(data))
+
         return metrics
 
     def _eval_bond_lengths(self, data: EvalData):
@@ -227,6 +235,44 @@ class InternalCoordinateEval(Evaluation):
                 progressbar_description="visualize bond angles",
             )
             metrics[f"bond_angles_pdf"] = pdf
+
+        return metrics
+
+    def _eval_dihedral_angles(self, data: EvalData):
+        metrics = {}
+
+        true = get_dihedral_angles(
+            data.samples_true,
+            topology=self._topology,
+            z_matrix=self._z_matrix,
+        )
+        pred = get_dihedral_angles(
+            data.samples_pred,
+            topology=self._topology,
+            z_matrix=self._z_matrix,
+        )
+        assert true.shape == pred.shape
+        n_marginals = true.shape[1]
+
+        hists: list[dict[str, Histogram1D]] = []
+        for i in range(n_marginals):
+            hist_true = get_dihedral_angle_hist(true[:, i])
+            hist_pred = get_dihedral_angle_hist(pred[:, i])
+
+            if self.include_true_histograms:
+                metrics[f"dihedral_angle_hist_{i}_true"] = hist_true
+            if self.include_pred_histograms:
+                metrics[f"dihedral_angle_hist_{i}_pred"] = hist_pred
+
+            hists.append({f"true_{i}": hist_true, f"pred_{i}": hist_pred})
+
+        if self.include_pdfs:
+            pdf = visualize_histograms(
+                hists,
+                vis_mode=self.vis_mode,
+                progressbar_description="visualize dihedral angles",
+            )
+            metrics[f"dihedral_angles_pdf"] = pdf
 
         return metrics
 
