@@ -2,7 +2,12 @@ from matplotlib import pyplot as plt
 import numpy as np
 import mdtraj as md
 import deeptime as dt
-from boltzkit.utils.histogram import Histogram2D, get_histogram_2d
+from boltzkit.utils.histogram import (
+    Histogram2D,
+    VisualizationMode,
+    get_histogram_2d,
+    plot_as_log_density,
+)
 from boltzkit.utils.pdf import matplotlib_to_pdf_buffer
 from boltzkit.evaluation.sample_based.wasserstein import get_euclidean_wasserstein_1_2
 from boltzkit.evaluation.sample_based._tica_help import _tica_features
@@ -71,7 +76,7 @@ def get_tica_hist(
 
 def visualize_tica(
     tica_hist: Histogram2D,
-    plot_as_free_energy: bool,
+    vis_mode: VisualizationMode = plot_as_log_density,
     ax: plt.Axes | None = None,
     show: bool = False,
 ):
@@ -81,7 +86,7 @@ def visualize_tica(
     else:
         fig = ax.figure
 
-    visualize_histogram_2d(tica_hist, plot_as_free_energy=plot_as_free_energy, ax=ax)
+    visualize_histogram_2d(tica_hist, vis_mode=vis_mode, ax=ax)
 
     pdf = matplotlib_to_pdf_buffer(fig)
 
@@ -96,15 +101,15 @@ def visualize_tica(
 def visualize_tica_true_and_pred(
     tica_hist_true: Histogram2D,
     tica_hist_pred: Histogram2D,
-    plot_as_free_energy: bool = True,
+    vis_mode: VisualizationMode = plot_as_log_density,
     show: bool = False,
 ):
     fig, axes = plt.subplots(ncols=2, figsize=(7, 3))
 
-    visualize_tica(tica_hist_true, plot_as_free_energy=plot_as_free_energy, ax=axes[0])
+    visualize_tica(tica_hist_true, vis_mode=vis_mode, ax=axes[0])
     axes[0].set_title("True")
 
-    visualize_tica(tica_hist_pred, plot_as_free_energy=plot_as_free_energy, ax=axes[1])
+    visualize_tica(tica_hist_pred, vis_mode=vis_mode, ax=axes[1])
     axes[1].set_title("Pred")
 
     pdf = matplotlib_to_pdf_buffer(fig)
@@ -164,7 +169,9 @@ if __name__ == "__main__":
 
     tica_proj = get_tica_projections(gt_samples, topology, tica_model)
     tica_hist = get_tica_hist(tica_proj)
-    visualize_histogram_2d(tica_hist, show=True, vmax=12.5, plot_as_free_energy=True)
+    visualize_histogram_2d(
+        tica_hist, show=True, vmax=12.5, vis_mode=plot_as_log_density
+    )
 
     tica_proj_true = tica_proj[:1000]
     tica_proj_pred = tica_proj[:1000] + 0.01 * np.random.randn(*tica_proj_true.shape)

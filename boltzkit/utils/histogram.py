@@ -1,10 +1,12 @@
 import os
+from typing import Protocol
 import numpy as np
 import matplotlib.pyplot as plt
 import numpy as np
 
 from boltzkit.utils.pdf import matplotlib_to_pdf_buffer
 from boltzkit.utils.molecular.conversion import to_free_energy
+from boltzkit.utils.shape_utils import get_balanced_grid
 
 
 class Histogram1D:
@@ -166,7 +168,6 @@ def get_histogram_1d(
     data: np.ndarray,
     n_bins: int = 100,
     data_range: tuple[float, float] | None = None,
-    density: bool = True,
 ):
     """
     Compute a 1D histogram of data.
@@ -180,8 +181,6 @@ def get_histogram_1d(
     data_range : tuple[float, float] or None, optional
         Tuple specifying (min, max) range of the histogram.
         If None, the range is inferred from the data.
-    density: bool
-        Whether to normalize counts or not, default is True.
 
     Returns
     -------
@@ -194,7 +193,7 @@ def get_histogram_1d(
     if data_range is None:
         data_range = (float(np.min(data)), float(np.max(data)))
 
-    hist, bin_edges = np.histogram(data, bins=n_bins, range=data_range, density=density)
+    hist, bin_edges = np.histogram(data, bins=n_bins, range=data_range, density=True)
     return Histogram1D(hist, bin_edges, data.shape[0])
 
 
@@ -265,9 +264,56 @@ def save_histograms(hists: dict[str, Histogram1D | Histogram2D], dirpath: str):
         h.save(fpath)
 
 
+class VisualizationMode(Protocol):
+    @property
+    def id(self) -> str:
+        pass
+
+    def __call__(self, hist: Histogram1D | Histogram2D) -> tuple[np.ndarray, str]:
+        pass
+
+
+def plot_as_free_energy(hist: Histogram1D | Histogram2D) -> tuple[np.ndarray, str]:
+    y = to_free_energy(hist.get_normalized_counts())
+    ylabel = r"free energy / $k_B T$"
+    return y, ylabel
+
+
+plot_as_free_energy.id = "free_energy"
+
+
+def plot_as_density(hist: Histogram1D | Histogram2D) -> tuple[np.ndarray, str]:
+    y = hist.get_as_density()
+
+    # This leaves areas without samples empty (no information).
+    y[y == 0] = np.nan
+
+    ylabel = "probability density"
+    return y, ylabel
+
+
+plot_as_density.id = "density"
+
+
+def plot_as_log_density(hist: Histogram1D | Histogram2D) -> tuple[np.ndarray, str]:
+    density = hist.get_as_density()
+    ylabel = "log density"
+
+    mask = density > 0
+    density[~mask] = 1e-300
+
+    # Compute free energy for nonzero probabilities
+    log_density = np.where(mask, np.log(density), -np.inf)
+
+    return log_density, ylabel
+
+
+plot_as_log_density.id = "log_density"
+
+
 def visualize_histogram_1d(
     hist: Histogram1D,
-    plot_as_free_energy: bool = False,
+    vis_mode: VisualizationMode = plot_as_log_density,
     show: bool = False,
     ax: plt.Axes | None = None,
     title: str | None = None,
@@ -290,8 +336,9 @@ def visualize_histogram_1d(
         Bin edges defining the histogram intervals. Length is one greater
         than the number of bins, i.e., shape: (n_bins + 1,). The i-th bin
         covers the interval [bin_edges[i], bin_edges[i+1]).
-    plot_as_free_energy : bool
-        Whether to convert counts to free energy (-ln P).
+    vis_mode : VisualizationMode
+        Transforms the given histogram counts/density into an np.ndarray for visualization.
+        The function further returns default label, which is used if `ylabel` is None.
     show : bool
         Whether to immediately display the plot.
     ax : plt.Axes, optional
@@ -316,19 +363,9 @@ def visualize_histogram_1d(
     # Compute bin centers
     x = hist.get_bin_centers()
 
-    # Convert to free energy if requested
-    if plot_as_free_energy:
-        y = to_free_energy(hist.get_normalized_counts())
-        if ylabel is None:
-            ylabel = r"free energy / $k_B T$"
-    else:
-        y = hist.get_as_density()
-
-        # This leaves areas without samples empty (no information).
-        y[y == 0] = np.nan
-
-        if ylabel is None:
-            ylabel = "probability density"
+    y, default_label = vis_mode(hist)
+    if ylabel is None:
+        ylabel = default_label
 
     # Create axes if not provided
     new_plot = ax is None
@@ -370,7 +407,7 @@ def visualize_histogram_1d(
 
 def visualize_histogram_2d(
     hist: Histogram2D,
-    plot_as_free_energy: bool = False,
+    vis_mode: VisualizationMode = plot_as_log_density,
     show: bool = False,
     ax: plt.Axes | None = None,
     title: str | None = None,
@@ -396,8 +433,9 @@ def visualize_histogram_2d(
     y_bin_edges : np.ndarray
         Bin edges for y-dimension. Shape: (ny + 1,)
 
-    plot_as_free_energy : bool
-        Whether to convert histogram to free energy (-ln P).
+    vis_mode : VisualizationMode
+        Transforms the given histogram counts/density into an np.ndarray for visualization.
+        The function further returns default label, which is used if `cbar_label` is None.
 
     show : bool
         Whether to immediately display the plot.
@@ -411,20 +449,9 @@ def visualize_histogram_2d(
         Buffer containing the generated PDF.
     """
 
-    # Convert to free energy if requested
-    if plot_as_free_energy:
-        z = to_free_energy(hist.get_normalized_counts())
-        if cbar_label is None:
-            cbar_label = r"free energy / $k_B T$"
-    else:
-        z = hist.get_as_density()
-
-        # This makes areas without samples white (no information),
-        # which increases contrast in low-density (but not zero) regions.
-        z[z == 0] = np.nan
-
-        if cbar_label is None:
-            cbar_label = "probability density"
+    z, default_label = vis_mode(hist)
+    if cbar_label is None:
+        cbar_label = default_label
 
     # Figure ownership
     new_plot = ax is None
@@ -471,5 +498,41 @@ def visualize_histogram_2d(
         plt.show()
     elif new_plot:
         plt.close(fig)
+
+    return pdf_buffer
+
+
+def visualize_histograms(
+    hists: list[Histogram2D] | list[Histogram1D],
+    vis_mode: VisualizationMode = plot_as_log_density,
+    grid_shape: tuple[int, int] | None = None,
+    show: bool = False,
+    **kwargs,
+):
+    num_hists = len(hists)
+
+    if grid_shape is None:
+        n_rows, n_cols = get_balanced_grid(num_hists)
+    else:
+        n_rows, n_cols = grid_shape
+
+    fig, axes = plt.subplots(n_rows, n_cols, squeeze=False)
+
+    for i in range(num_hists):
+        row = i // n_cols
+        col = i % n_cols
+        ax: plt.Axes = axes[row, col]
+
+        h = hists[i]
+
+        if isinstance(h, Histogram1D):
+            visualize_histogram_1d(h, vis_mode=vis_mode, ax=ax, **kwargs)
+        else:
+            visualize_histogram_2d(h, vis_mode=vis_mode, ax=ax, **kwargs)
+
+    pdf_buffer = matplotlib_to_pdf_buffer(fig)
+
+    if show:
+        plt.show()
 
     return pdf_buffer

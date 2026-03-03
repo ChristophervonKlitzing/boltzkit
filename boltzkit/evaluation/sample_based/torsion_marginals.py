@@ -5,10 +5,11 @@ import mdtraj as md
 from boltzkit.utils.histogram import (
     Histogram1D,
     Histogram2D,
+    VisualizationMode,
     get_histogram_1d,
     get_histogram_2d,
+    plot_as_log_density,
 )
-from boltzkit.utils.shape_utils import get_balanced_grid
 from boltzkit.evaluation.sample_based.wasserstein import (
     get_torus_wasserstein as _get_torus_wasserstein,
 )
@@ -163,74 +164,9 @@ def get_ramachandran_total_variation(hist_p: Histogram2D, hist_q: Histogram2D):
     return float(total_variation_ram)
 
 
-def visualize_torsion_marginals_single_type(
-    hists: list[Histogram2D] | list[Histogram1D],
-    plot_as_free_energy: bool,
-    grid_shape: tuple[int, int] | None = None,
-    show: bool = False,
-    **kwargs,
-):
-    num_hists = len(hists)
-
-    if grid_shape is None:
-        n_rows, n_cols = get_balanced_grid(num_hists)
-    else:
-        n_rows, n_cols = grid_shape
-
-    fig, axes = plt.subplots(n_rows, n_cols, squeeze=False)
-
-    for i in range(num_hists):
-        row = i // n_cols
-        col = i % n_cols
-        ax: plt.Axes = axes[row, col]
-
-        h = hists[i]
-
-        if isinstance(h, Histogram1D):
-            visualize_histogram_1d(
-                h, plot_as_free_energy=plot_as_free_energy, ax=ax, **kwargs
-            )
-        else:
-            visualize_histogram_2d(
-                h, plot_as_free_energy=plot_as_free_energy, ax=ax, **kwargs
-            )
-
-    pdf_buffer = matplotlib_to_pdf_buffer(fig)
-
-    if show:
-        plt.show()
-
-    return pdf_buffer
-
-
-def visualize_torsion_marginals_per_type(
-    torsion_marginals: tuple[list[Histogram2D], list[Histogram1D], list[Histogram1D]],
-    plot_as_free_energy: bool,
-    grid_shape: tuple[int, int] | None = None,
-    show: bool = False,
-    **kwargs,
-) -> tuple[PdfBuffer, PdfBuffer, PdfBuffer]:
-    labels = (("phi", "psi"), ("phi", None), (None, "psi"))
-    pdf_list = []
-    for h, labels in zip(torsion_marginals, labels):
-        xlabel, ylabel = labels
-        pdf = visualize_torsion_marginals_single_type(
-            h,
-            plot_as_free_energy=plot_as_free_energy,
-            grid_shape=grid_shape,
-            show=show,
-            xlabel=xlabel,
-            ylabel=ylabel,
-            **kwargs,
-        )
-        pdf_list.append(pdf)
-
-    return tuple(pdf_list)
-
-
 def visualize_torsion_marginals_all(
     torsion_marginals: tuple[list[Histogram2D], list[Histogram1D], list[Histogram1D]],
-    plot_as_free_energy: bool,
+    vis_mode: VisualizationMode = plot_as_log_density,
     show: bool = False,
     **kwargs,
 ):
@@ -254,7 +190,7 @@ def visualize_torsion_marginals_all(
 
         visualize_histogram_2d(
             h_ram,
-            plot_as_free_energy=plot_as_free_energy,
+            vis_mode=vis_mode,
             ax=ax_ram,
             xlabel=phi_label,
             ylabel=psi_label,
@@ -263,7 +199,7 @@ def visualize_torsion_marginals_all(
 
         visualize_histogram_1d(
             h_phi,
-            plot_as_free_energy=plot_as_free_energy,
+            vis_mode=vis_mode,
             ax=ax_phi,
             xlabel=phi_label,
             **kwargs,
@@ -271,7 +207,7 @@ def visualize_torsion_marginals_all(
 
         visualize_histogram_1d(
             h_psi,
-            plot_as_free_energy=plot_as_free_energy,
+            vis_mode=vis_mode,
             ax=ax_psi,
             xlabel=psi_label,
             **kwargs,
@@ -295,7 +231,7 @@ def visualize_torsion_marginals_dual(
     torsion_marginals_pred: tuple[
         list[Histogram2D], list[Histogram1D], list[Histogram1D]
     ],
-    plot_as_free_energy: bool,
+    vis_mode: VisualizationMode = plot_as_log_density,
     show: bool = False,
     cmap: str | None = None,
     **kwargs,
@@ -328,7 +264,7 @@ def visualize_torsion_marginals_dual(
 
         visualize_histogram_2d(
             h_ram_true,
-            plot_as_free_energy=plot_as_free_energy,
+            vis_mode=vis_mode,
             ax=ax_ram_true,
             title="True",
             xlabel=phi_label,
@@ -339,7 +275,7 @@ def visualize_torsion_marginals_dual(
 
         visualize_histogram_2d(
             h_ram_pred,
-            plot_as_free_energy=plot_as_free_energy,
+            vis_mode=vis_mode,
             ax=ax_ram_pred,
             title="Pred",
             xlabel=phi_label,
@@ -350,7 +286,7 @@ def visualize_torsion_marginals_dual(
 
         visualize_histogram_1d(
             h_phi_true,
-            plot_as_free_energy=plot_as_free_energy,
+            vis_mode=vis_mode,
             ax=ax_phi,
             label="True",
             xlabel=phi_label,
@@ -358,7 +294,7 @@ def visualize_torsion_marginals_dual(
         )
         visualize_histogram_1d(
             h_phi_pred,
-            plot_as_free_energy=plot_as_free_energy,
+            vis_mode=vis_mode,
             ax=ax_phi,
             label="Pred",
             xlabel=phi_label,
@@ -367,7 +303,7 @@ def visualize_torsion_marginals_dual(
 
         visualize_histogram_1d(
             h_psi_true,
-            plot_as_free_energy=plot_as_free_energy,
+            vis_mode=vis_mode,
             ax=ax_psi,
             label="True",
             xlabel=psi_label,
@@ -376,7 +312,7 @@ def visualize_torsion_marginals_dual(
         )
         visualize_histogram_1d(
             h_psi_pred,
-            plot_as_free_energy=plot_as_free_energy,
+            vis_mode=vis_mode,
             ax=ax_psi,
             label="Pred",
             xlabel=psi_label,
@@ -415,12 +351,12 @@ if __name__ == "__main__":
 
     torsion_marginals = get_torsion_marginal_hists(*angles)
     torsion_marginals2 = get_torsion_marginal_hists(*angles2)
-    plot_as_free_energy = True
+    vis_mode = plot_as_log_density
 
     pdf_buffer = visualize_torsion_marginals_dual(
         torsion_marginals,
         torsion_marginals2,
-        plot_as_free_energy=plot_as_free_energy,
+        vis_mode=vis_mode,
         show=True,
     )
 
