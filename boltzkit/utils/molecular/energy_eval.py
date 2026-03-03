@@ -290,16 +290,20 @@ class ParallelEnergyEval:
         topology: app.Topology,
         system: mm.System,
         platform: Literal["CPU", "CUDA"] | None = None,
-        n_workers: int = mp.cpu_count(),
+        n_workers: int | None = None,
     ):
         super().__init__()
+
+        if n_workers is None:
+            n_workers = mp.cpu_count()
+
         self.n_workers = n_workers
         print(f"Create parallel energy evaluation with {self.n_workers} workers")
 
-        # fork might lead to issues with cuda
-        mp.set_start_method("spawn", force=True)
+        # fork will likely lead to issues with cuda -> use spawn
+        cxt = mp.get_context("spawn")
 
-        self.pool = mp.Pool(
+        self.pool = cxt.Pool(
             processes=self.n_workers,
             initializer=_init_worker,
             initargs=(topology, system, platform),
@@ -392,7 +396,7 @@ if __name__ == "__main__":
         v2 = -np.dot(forces.flatten(), shift.flatten())
         print("Result should be 1:", v1 / v2)
 
-    measure_time = True
+    measure_time = False
     if measure_time:
         import timeit
 
