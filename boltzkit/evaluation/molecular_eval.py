@@ -109,7 +109,7 @@ class TorsionMarginalEval(Evaluation):
         return metrics
 
 
-class InternalCoordinateEval(Evaluation):
+class BondLengthEval(Evaluation):
     requirements = ["samples_pred", "samples_true"]
 
     def __init__(
@@ -120,15 +120,9 @@ class InternalCoordinateEval(Evaluation):
         include_pdfs: bool = True,
         include_true_histograms: bool = False,
         include_pred_histograms: bool = False,
-        eval_bond_lengths: bool = True,
-        eval_bond_angles: bool = True,
-        eval_dihedral_angles: bool = True,
         max_histogram_bond_length: float | None = 2.0,
     ):
         super().__init__()
-        assert (
-            eval_bond_lengths or eval_bond_angles or eval_dihedral_angles
-        ), "At least one of these must be set to True"
 
         self._topology = topology
         self._z_matrix = z_matrix
@@ -139,26 +133,9 @@ class InternalCoordinateEval(Evaluation):
         self.include_true_histograms = include_true_histograms
         self.include_pred_histograms = include_pred_histograms
 
-        self.eval_bond_lengths = eval_bond_lengths
-        self.eval_bond_angles = eval_bond_angles
-        self.eval_dihedral_angles = eval_dihedral_angles
-
         self.max_histogram_bond_length = max_histogram_bond_length
 
-    def _eval(self, data):
-        metrics = {}
-        if self.eval_bond_lengths:
-            metrics.update(self._eval_bond_lengths(data))
-
-        if self.eval_bond_angles:
-            metrics.update(self._eval_bond_angles(data))
-
-        if self.eval_dihedral_angles:
-            metrics.update(self._eval_dihedral_angles(data))
-
-        return metrics
-
-    def _eval_bond_lengths(self, data: EvalData):
+    def _eval(self, data: EvalData):
         metrics = {}
 
         true = get_bond_lengths(
@@ -200,7 +177,31 @@ class InternalCoordinateEval(Evaluation):
 
         return metrics
 
-    def _eval_bond_angles(self, data: EvalData):
+
+class BondAngleEval(Evaluation):
+    requirements = ["samples_pred", "samples_true"]
+
+    def __init__(
+        self,
+        topology: md.Topology,
+        z_matrix: list[tuple[int, int, int, int]],
+        vis_mode: VisualizationMode = plot_as_log_density,
+        include_pdfs: bool = True,
+        include_true_histograms: bool = False,
+        include_pred_histograms: bool = False,
+    ):
+        super().__init__()
+
+        self._topology = topology
+        self._z_matrix = z_matrix
+
+        self.vis_mode = vis_mode
+
+        self.include_pdfs = include_pdfs
+        self.include_true_histograms = include_true_histograms
+        self.include_pred_histograms = include_pred_histograms
+
+    def _eval(self, data: EvalData):
         metrics = {}
 
         true = get_bond_angles(
@@ -238,7 +239,31 @@ class InternalCoordinateEval(Evaluation):
 
         return metrics
 
-    def _eval_dihedral_angles(self, data: EvalData):
+
+class DihedralAngleEval(Evaluation):
+    requirements = ["samples_pred", "samples_true"]
+
+    def __init__(
+        self,
+        topology: md.Topology,
+        z_matrix: list[tuple[int, int, int, int]],
+        vis_mode: VisualizationMode = plot_as_log_density,
+        include_pdfs: bool = True,
+        include_true_histograms: bool = False,
+        include_pred_histograms: bool = False,
+    ):
+        super().__init__()
+
+        self._topology = topology
+        self._z_matrix = z_matrix
+
+        self.vis_mode = vis_mode
+
+        self.include_pdfs = include_pdfs
+        self.include_true_histograms = include_true_histograms
+        self.include_pred_histograms = include_pred_histograms
+
+    def _eval(self, data: EvalData):
         metrics = {}
 
         true = get_dihedral_angles(
@@ -361,9 +386,7 @@ if __name__ == "__main__":
     # tica_eval = TicaEval(topology, tica_model, vis_mode=plot_as_log_density)
     # metrics.update(tica_eval.eval(eval_data))
 
-    ic_eval = InternalCoordinateEval(
-        topology, z_matrix, vis_mode=plot_as_log_density, eval_bond_lengths=False
-    )
+    ic_eval = DihedralAngleEval(topology, z_matrix)
     metrics.update(ic_eval.eval(eval_data))
 
     print(metrics)
