@@ -3,6 +3,7 @@ from typing import Protocol
 import numpy as np
 import matplotlib.pyplot as plt
 import numpy as np
+from tqdm import tqdm
 
 from boltzkit.utils.pdf import matplotlib_to_pdf_buffer
 from boltzkit.utils.molecular.conversion import to_free_energy
@@ -356,8 +357,8 @@ def visualize_histogram_1d(
 
     Returns
     -------
-    pdf_buffer : PdfBuffer
-        Buffer containing the generated PDF.
+    pdf_buffer : PdfBuffer | None
+        Buffer containing the generated PDF or None if `ax` is not None
     """
 
     # Compute bin centers
@@ -391,10 +392,12 @@ def visualize_histogram_1d(
     if label:
         ax.legend()
 
-    # ax.yaxis.set_label_position(ylabel_postion)
-
     fig.tight_layout()
-    pdf_buffer = matplotlib_to_pdf_buffer(fig)
+
+    if ax is None:
+        pdf_buffer = matplotlib_to_pdf_buffer(fig)
+    else:
+        pdf_buffer = None
 
     # Show plot immediately if requested
     if show:
@@ -503,10 +506,11 @@ def visualize_histogram_2d(
 
 
 def visualize_histograms(
-    hists: list[Histogram2D] | list[Histogram1D],
+    hists: list[Histogram2D] | list[Histogram1D | dict[str, Histogram1D]],
     vis_mode: VisualizationMode = plot_as_log_density,
     grid_shape: tuple[int, int] | None = None,
     show: bool = False,
+    progressbar_description: str = "",
     **kwargs,
 ):
     num_hists = len(hists)
@@ -516,23 +520,42 @@ def visualize_histograms(
     else:
         n_rows, n_cols = grid_shape
 
-    fig, axes = plt.subplots(n_rows, n_cols, squeeze=False)
+    base_width = 3.3
+    base_height = 3
+    fig, axes = plt.subplots(
+        n_rows,
+        n_cols,
+        figsize=(base_width * n_cols, base_height * n_rows),
+        squeeze=False,
+    )
 
-    for i in range(num_hists):
+    for i in tqdm(range(num_hists), desc=progressbar_description):
+        # print(f"Visualize histogram [{i+1}/{num_hists}]")
         row = i // n_cols
         col = i % n_cols
         ax: plt.Axes = axes[row, col]
 
-        h = hists[i]
+        obj = hists[i]
 
-        if isinstance(h, Histogram1D):
-            visualize_histogram_1d(h, vis_mode=vis_mode, ax=ax, **kwargs)
+        if isinstance(obj, dict):
+            for key, h in obj.items():
+                visualize_histogram_1d(h, vis_mode=vis_mode, ax=ax, label=key, **kwargs)
+        elif isinstance(obj, Histogram1D):
+            visualize_histogram_1d(obj, vis_mode=vis_mode, ax=ax, **kwargs)
         else:
-            visualize_histogram_2d(h, vis_mode=vis_mode, ax=ax, **kwargs)
+            visualize_histogram_2d(obj, vis_mode=vis_mode, ax=ax, **kwargs)
+
+    for i in range(num_hists, n_rows * n_cols):
+        row = i // n_cols
+        col = i % n_cols
+        ax: plt.Axes = axes[row, col]
+        ax.set_visible(False)
 
     pdf_buffer = matplotlib_to_pdf_buffer(fig)
 
     if show:
         plt.show()
+    else:
+        plt.close()
 
     return pdf_buffer

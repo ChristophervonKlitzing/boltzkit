@@ -82,7 +82,13 @@ def pdf_to_wandb_image(pdf_buffer: PdfBuffer, dpi=50):
     return wandb.Image(pil_image)
 
 
-def plot_pdf(pdf_buffer: PdfBuffer, dpi=500, ax=None, show: bool = False):
+def plot_pdf(
+    pdf_buffer: PdfBuffer,
+    dpi=500,
+    ax=None,
+    show: bool = False,
+    title: str | None = None,
+):
     """
     This function is mainly for debugging purposes
     """
@@ -102,6 +108,9 @@ def plot_pdf(pdf_buffer: PdfBuffer, dpi=500, ax=None, show: bool = False):
     ax.axis("off")
     # ax.set_title("PDF Preview")
     fig.tight_layout()
+
+    if title is not None:
+        ax.set_title(title)
 
     if show:
         plt.show()
