@@ -1,3 +1,10 @@
+from collections import defaultdict
+from typing import Callable
+
+from boltzkit.evaluation.sample_based.histogram_comparison import (
+    HistogramMetric,
+    get_histogram_fwd_kullback_leibler,
+)
 from boltzkit.evaluation.sample_based.internal_coordinate_eval import (
     get_bond_angle_hist,
     get_bond_length_hist,
@@ -18,7 +25,6 @@ from boltzkit.utils.histogram import (
     Histogram2D,
     VisualizationMode,
     plot_as_log_density,
-    visualize_histogram_1d,
     visualize_histograms,
 )
 from boltzkit.utils.molecular.marginals import (
@@ -43,6 +49,9 @@ class TorsionMarginalEval(Evaluation):
         include_pdf: bool = True,
         include_true_histograms: bool = True,
         include_pred_histograms: bool = True,
+        histogram_metrics: tuple[HistogramMetric] = [
+            get_histogram_fwd_kullback_leibler
+        ],
     ):
         super().__init__()
         self._topology = topology
@@ -51,6 +60,8 @@ class TorsionMarginalEval(Evaluation):
         self.include_pdf = include_pdf
         self.include_true_histograms = include_true_histograms
         self.include_pred_histograms = include_pred_histograms
+
+        self.histogram_metrics = histogram_metrics
 
     def _eval(self, data):
         samples_true = self._reshape(data.samples_true)
@@ -74,6 +85,17 @@ class TorsionMarginalEval(Evaluation):
 
         torsion_marginals_true = get_torsion_marginal_hists(*angles_true)
         torsion_marginals_pred = get_torsion_marginal_hists(*angles_pred)
+
+        if len(self.histogram_metrics) > 0:
+            # Only get 2D histogram metrics fow now
+            marginals_true_2d = torsion_marginals_true[0]
+            marginals_pred_2d = torsion_marginals_pred[0]
+
+            metrics.update(
+                self._get_histogram_metrics(
+                    marginals_true_2d, marginals_pred_2d, "phi_psi"
+                ),
+            )
 
         if self.include_pdf:
             pdf_buffer = visualize_torsion_marginals_dual(
@@ -105,6 +127,30 @@ class TorsionMarginalEval(Evaluation):
         if self.include_pred_histograms:
             flattened_marginals_pred = flatten_marginals(torsion_marginals_pred, "pred")
             metrics.update(flattened_marginals_pred)
+
+        return metrics
+
+    def _get_histogram_metrics(
+        self,
+        true: list[Histogram2D],
+        pred: list[Histogram2D],
+        key: str,
+    ):
+        metrics = {}
+        summed_metrics: dict[str, list[float]] = defaultdict(list)
+
+        # Iterate over the torsion backbone angle pairs
+        for i, (true_hist, pred_hist) in enumerate(zip(true, pred)):
+            # evaluate all specified metrics on the angle histogram pairs
+            for metric in self.histogram_metrics:
+                m_i = metric(true_hist, pred_hist)
+                metrics[f"torsion_marginal_{key}_{metric.id}_{i}"] = m_i
+                summed_metrics[metric.id].append(m_i)
+
+        for id, metric_values in summed_metrics.items():
+            metrics[f"torsion_marginal_{key}_{id}_mean"] = np.array(
+                metric_values
+            ).mean()
 
         return metrics
 

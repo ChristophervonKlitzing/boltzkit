@@ -133,37 +133,6 @@ def get_torus_wasserstein_2(
     return T_W2
 
 
-def get_ramachandran_kl(hist_p: Histogram2D, hist_q: Histogram2D):
-    assert hist_p.get_num_bins() == hist_q.get_num_bins()
-
-    hist_ram_p = hist_p.get_as_density()
-    hist_ram_q = hist_q.get_as_density()
-
-    eps_ram = 1e-10
-    bin_area = hist_p.get_bin_area()
-
-    log_ratio = np.log(hist_ram_p + eps_ram) - np.log(hist_ram_q + eps_ram)
-    kld_ram = (
-        np.sum(hist_ram_p * log_ratio)
-        * bin_area  # To get the properly normalized integral / KLD
-    )
-    return float(kld_ram)
-
-
-def get_ramachandran_total_variation(hist_p: Histogram2D, hist_q: Histogram2D):
-    assert hist_p.get_num_bins() == hist_q.get_num_bins()
-
-    hist_ram_p = hist_p.get_as_density()
-    hist_ram_q = hist_q.get_as_density()
-
-    bin_area = hist_p.get_bin_area()
-
-    total_variation_ram = (
-        0.5 * np.sum(np.abs(hist_ram_p - hist_ram_q)) * bin_area
-    )  # To get the properly normalized integral / KLD
-    return float(total_variation_ram)
-
-
 def visualize_torsion_marginals_all(
     torsion_marginals: tuple[list[Histogram2D], list[Histogram1D], list[Histogram1D]],
     vis_mode: VisualizationMode = plot_as_log_density,

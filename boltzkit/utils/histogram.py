@@ -62,9 +62,9 @@ class Histogram1D:
 
     def get_as_density(self) -> np.ndarray:
         counts = self.get_normalized_counts()
-        return counts / self.get_bin_width()
+        return counts / self.get_bin_area()
 
-    def get_bin_width(self):
+    def get_bin_area(self):
         min_x, max_x = self.get_extend()
         x_range = max_x - min_x
         n_bins = self.get_num_bins()

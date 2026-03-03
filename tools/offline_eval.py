@@ -1,6 +1,8 @@
 import argparse
 from pathlib import Path
 
+import numpy as np
+
 from boltzkit.evaluation.molecular_eval import TicaEval, TorsionMarginalEval
 from boltzkit.utils.dataloader import load_from_file, load_tica_model, load_topology
 from boltzkit.evaluation.eval import (
@@ -129,9 +131,12 @@ def main():
         true_samples_target_log_prob = None
 
     if args.pred_samples is not None:
-        pred_samples = load_from_file(
-            args.pred_samples, data_type="samples", n_samples=args.n_samples
-        )
+        if str(args.pred_samples) == "_debug":
+            pred_samples = true_samples + 0.1 * np.random.randn(*true_samples.shape)
+        else:
+            pred_samples = load_from_file(
+                args.pred_samples, data_type="samples", n_samples=args.n_samples
+            )
     else:
         pred_samples = None
 
@@ -191,10 +196,6 @@ def main():
 
         # TODO: Store metrics in a yaml
 
-    if len(pdfs) > 0:
-        for key, pdf_buffer in pdfs.items():
-            plot_pdf(pdf_buffer, dpi=100, show=True, title=key.replace("_pdf", ""))
-
     # Print scalar metrics if any
     if len(scalar_metrics) > 0:
         print("\n=== Evaluation Metrics ===\n")
@@ -204,6 +205,10 @@ def main():
                 print(f"{k:30s}: {v:.6f}")
             else:
                 print(f"{k:30s}: {v}")
+
+    if len(pdfs) > 0:
+        for key, pdf_buffer in pdfs.items():
+            plot_pdf(pdf_buffer, dpi=100, show=True, title=key.replace("_pdf", ""))
 
 
 if __name__ == "__main__":
