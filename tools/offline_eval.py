@@ -18,7 +18,7 @@ from boltzkit.utils.pdf import plot_pdf, save_pdfs
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Evaluate offline by loading samples and target evaluations from files."
+        description="Evaluate offline by loading samples and log probs from files."
     )
 
     parser.add_argument(
@@ -77,7 +77,7 @@ def parse_args() -> argparse.Namespace:
         "--tica_model",
         type=Path,
         default=None,
-        help="Path to a tica model which can be either a pickle file or a NumPy or PyTorch array",
+        help="Path to a tica model (e.g., a pickled deeptime model)",
     )
 
     parser.add_argument(
