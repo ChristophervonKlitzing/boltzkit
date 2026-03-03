@@ -163,6 +163,7 @@ def load_from_file(
     return data
 
 
+@lru_cache
 def load_tica_model(path: str | Path):
     # TODO: Also allow numpy and pytorch arrays and convert to deeptime tica model
     if isinstance(path, str):
@@ -177,8 +178,9 @@ def load_tica_model(path: str | Path):
     return tica_model
 
 
+@lru_cache
 def load_topology(path: str | Path):
-    # TODO: Support other formats
+    # TODO: Support other formats like numpy or pytorch arrays, yaml configs, pickle
 
     if isinstance(path, str):
         path = Path(path)
