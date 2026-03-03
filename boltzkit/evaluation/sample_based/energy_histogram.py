@@ -3,7 +3,8 @@ import numpy as np
 from boltzkit.utils.histogram import (
     Histogram1D,
     get_histogram_1d,
-    visualize_histogram_1d as _visualize_hist_1d,
+    plot_as_density,
+    visualize_histogram_1d,
 )
 from boltzkit.utils.pdf import matplotlib_to_pdf_buffer
 
@@ -97,15 +98,17 @@ def visualize_energy_hist_dual(
     fig, ax = plt.subplots()
 
     # Plot both on the same axis
-    _visualize_hist_1d(
+    visualize_histogram_1d(
         true_energy_hist,
+        vis_mode=plot_as_density,
         ax=ax,
         label="True",
         show=False,
     )
 
-    _visualize_hist_1d(
+    visualize_histogram_1d(
         pred_energy_hist,
+        vis_mode=plot_as_density,
         ax=ax,
         label="Pred",
         show=False,

@@ -1,5 +1,5 @@
 from boltzkit.evaluation.eval import (
-    eval,
+    run_eval,
     make_wandb_compatible,
     get_histograms,
     get_pdfs,

@@ -335,7 +335,7 @@ def update_dict_with_id(target: dict, new_data: dict, idx: int) -> dict:
     return target
 
 
-def eval(
+def run_eval(
     data: EvalData,
     *,
     evals: list[Evaluation | tuple[Evaluation]] = COMMON_EVALS,
@@ -372,6 +372,17 @@ def make_wandb_compatible(
         return v
 
     return {k: transform(v) for k, v in data.items()}
+
+
+def get_scalar_metrics(data: dict[str, ValueType]):
+    def _is_float_like(v):
+        try:
+            float(v)
+        except:
+            return False
+        return True
+
+    return {k: float(v) for k, v in data.items() if _is_float_like(v)}
 
 
 def get_histograms(
@@ -436,7 +447,7 @@ if __name__ == "__main__":
     # -------------------------
     # Run evaluation
     # -------------------------
-    metrics = eval(data)
+    metrics = run_eval(data)
 
     # -------------------------
     # Print results

@@ -50,26 +50,26 @@ The evaluation is modularized. Input is an `EvalData` object with all-optional f
 ### Standard metrics
 To run the full evaluation pipeline with general domain-independent metrics, run:
 ```python
-from boltzkit.evaluation import eval, EvalData
+from boltzkit.evaluation import run_eval, EvalData
 
 # Prepare data
 data = EvalData(...)
 
-metrics = eval(data)
+metrics = run_eval(data)
 ```
 
 ### Custom metrics
 To incorporate custom metrics, such as Ramachandran plots for torsion angle marginals in molecular tasks, you can pass one or multiple `Evaluation` objects.
 For example, to additionally include torsion marginals, use:
 ```python
-from boltzkit.evaluation import eval, COMMON_EVALS
+from boltzkit.evaluation import run_eval, COMMON_EVALS
 from boltzkit.evaluation.molecular_eval import TorsionMarginalEval
 
 # topology can for example be obtained via our `MolecularBoltzmann` target (available under `boltzkit.targets`).
 topology = ...
 molecular_eval = TorsionMarginalEval(topology) # also allows configuration of metrics via flags
 
-metrics = eval(
+metrics = run_eval(
     data,
     evals=COMMON_EVALS + [molecular_eval]
 )
@@ -79,7 +79,7 @@ metrics = eval(
 By default, an `Evaluation` is skipped with a warning if the provided `data` object does not contain all required fields.
 This behavior can be disabled by setting:
 ```python
-metrics = eval(data, skip_on_missing_data=False)
+metrics = run_eval(data, skip_on_missing_data=False)
 ```
 When `skip_on_missing_data` is set to `False`, a `ValueError` is raised if any required fields are missing for one of the `Evaluation` modules.
 
