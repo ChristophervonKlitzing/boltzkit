@@ -177,7 +177,7 @@ def main():
         true_samples_target_log_prob=true_samples_target_log_prob,
         pred_samples_target_log_prob=pred_samples_target_log_prob,
     )
-    results = run_eval(data, evals=eval_objects)
+    results = run_eval(data, evals=eval_objects, skip_on_missing_data=False)
 
     scalar_metrics = get_scalar_metrics(results)
     pdfs = get_pdfs(results)
