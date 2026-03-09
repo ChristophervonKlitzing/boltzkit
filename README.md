@@ -85,6 +85,7 @@ When `skip_on_missing_data` is set to `False`, a `ValueError` is raised if any r
 
 
 ## Log to Weights & Biases
+**Note**: Requires wandb to be installed!
 ```python
 from boltzkit.evaluation import make_wandb_compatible
 import wandb 
@@ -161,6 +162,3 @@ python -m unittest tests.demo
 ## Create unit test
 test files need to start with `test_` to be discoverable.
 
-
-# TODOs:
-- more angles (potentially requires internal coordinates and z-matrix -> provide numpy implementation of internal coordinates for this)
