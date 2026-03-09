@@ -410,7 +410,7 @@ class TicaEval(Evaluation):
 if __name__ == "__main__":
     from boltzkit.targets.boltzmann import MolecularBoltzmann
     from boltzkit.utils.pdf import plot_pdf
-    from boltzkit.evaluation.eval import EvalData, EnergyHistEval
+    from boltzkit.evaluation.eval import EvalData, EnergyHistEval, run_eval
     from boltzkit.evaluation.eval import get_pdfs
 
     bm = MolecularBoltzmann("datasets/chrklitz99/test_system")
@@ -429,20 +429,21 @@ if __name__ == "__main__":
         pred_samples_target_log_prob=bm.get_log_prob(pred_samples),
     )
 
-    metrics = {}
+    mol_eval_pipeline = []
 
-    molecular_eval = TorsionMarginalEval(topology, vis_mode=plot_as_log_density)
-    metrics.update(molecular_eval.eval(eval_data))
+    torsion_eval = TorsionMarginalEval(topology, vis_mode=plot_as_log_density)
+    mol_eval_pipeline.append(torsion_eval)
 
     # tica_eval = TicaEval(topology, tica_model, vis_mode=plot_as_log_density)
-    # metrics.update(tica_eval.eval(eval_data))
+    # eval_nodes.append(tica_eval)
 
     # ic_eval = DihedralAngleEval(topology, z_matrix)
-    # metrics.update(ic_eval.eval(eval_data))
+    # eval_nodes.append(ic_eval)
 
     energy_hist_eval = EnergyHistEval()
-    metrics.update(energy_hist_eval.eval(eval_data))
+    mol_eval_pipeline.append(energy_hist_eval)
 
+    metrics = run_eval(eval_data, evals=mol_eval_pipeline)
     print(metrics)
 
     pdfs = get_pdfs(metrics)
