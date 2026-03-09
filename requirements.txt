@@ -5,3 +5,4 @@ pyyaml
 POT
 deeptime
 matplotlib
+reform @ git+https://github.com/ChristophervonKlitzing/reform.git
