@@ -410,30 +410,38 @@ class TicaEval(Evaluation):
 if __name__ == "__main__":
     from boltzkit.targets.boltzmann import MolecularBoltzmann
     from boltzkit.utils.pdf import plot_pdf
-    from boltzkit.evaluation.eval import EvalData
+    from boltzkit.evaluation.eval import EvalData, EnergyHistEval
     from boltzkit.evaluation.eval import get_pdfs
 
-    bm = MolecularBoltzmann("datasets/chrklitz99/alanine_tetrapeptide")
+    bm = MolecularBoltzmann("datasets/chrklitz99/test_system")
 
     topology = bm.get_mdtraj_topology()
     tica_model = bm.get_tica_model()
     z_matrix = bm.get_z_matrix()
 
-    gt_samples = bm.load_dataset(T=300.0, type="val")[:500]
-    gt_samples = gt_samples.reshape(gt_samples.shape[0], -1)
-    pred_samples = gt_samples + 0.1 * np.random.randn(*gt_samples.shape)
-    eval_data = EvalData(samples_true=gt_samples, samples_pred=pred_samples)
+    gt_samples = bm.load_dataset(T=300.0, type="val")[:2000]
+    gt_samples = gt_samples.reshape(gt_samples.shape[0], -1) * 0.1
+    pred_samples = gt_samples + 0.001 * np.random.randn(*gt_samples.shape)
+    eval_data = EvalData(
+        samples_true=gt_samples,
+        samples_pred=pred_samples,
+        true_samples_target_log_prob=bm.get_log_prob(gt_samples),
+        pred_samples_target_log_prob=bm.get_log_prob(pred_samples),
+    )
 
     metrics = {}
 
-    # molecular_eval = TorsionMarginalEval(topology, vis_mode=plot_as_log_density)
-    # metrics.update(molecular_eval.eval(eval_data))
-    #
+    molecular_eval = TorsionMarginalEval(topology, vis_mode=plot_as_log_density)
+    metrics.update(molecular_eval.eval(eval_data))
+
     # tica_eval = TicaEval(topology, tica_model, vis_mode=plot_as_log_density)
     # metrics.update(tica_eval.eval(eval_data))
 
-    ic_eval = DihedralAngleEval(topology, z_matrix)
-    metrics.update(ic_eval.eval(eval_data))
+    # ic_eval = DihedralAngleEval(topology, z_matrix)
+    # metrics.update(ic_eval.eval(eval_data))
+
+    energy_hist_eval = EnergyHistEval()
+    metrics.update(energy_hist_eval.eval(eval_data))
 
     print(metrics)
 
