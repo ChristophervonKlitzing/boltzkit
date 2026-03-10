@@ -31,6 +31,7 @@ class MolecularBoltzmann(NumPyTarget):
         self,
         path: str,
         n_workers: None | int = -1,
+        length_unit: Literal['angstrom','nanometer'] = 'nanometer',
         # energy_transform: FrameworkAgnosticFunction | None = None,
         **kwargs,
     ):
@@ -131,6 +132,18 @@ class MolecularBoltzmann(NumPyTarget):
         _, forces = self.energy_eval.evaluate_batch(x, include_energy=False)
         scores = self._forces_to_score(forces)
         return scores
+
+    def _numpy_energy_and_forces(self, x):
+        energy, forces = self.energy_eval.evaluate_batch(x)
+        return energy, forces
+
+    def _numpy_energy(self, x):
+        energy, _ = self.energy_eval.evaluate_batch(x, include_forces=False)
+        return energy
+
+    def _numpy_forces(self, x):
+        _, forces = self.energy_eval.evaluate_batch(x, include_energy=False)
+        return forces
 
     def get_z_matrix(self, allow_autogen=True) -> list[tuple[int, int, int, int]]:
         """
