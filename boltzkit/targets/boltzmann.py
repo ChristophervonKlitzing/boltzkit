@@ -31,7 +31,7 @@ class MolecularBoltzmann(NumPyTarget):
         self,
         path: str,
         n_workers: None | int = -1,
-        length_unit: Literal['angstrom','nanometer'] = 'nanometer',
+        length_unit: Literal["angstrom", "nanometer"] = "nanometer",
         # energy_transform: FrameworkAgnosticFunction | None = None,
         **kwargs,
     ):
@@ -48,6 +48,14 @@ class MolecularBoltzmann(NumPyTarget):
         self._energy_eval = None
 
         self._pos_min_energy_cache = None
+
+        if isinstance(length_unit, str):
+            if length_unit == "angstrom":
+                self.length_factor = 0.1
+            elif length_unit == "nanometer":
+                self.length_factor = 1.0
+        else:
+            self.length_factor = float(length_unit)
 
     def _init_openmm(self):
         pdb_key = "pdb_file"
@@ -93,7 +101,9 @@ class MolecularBoltzmann(NumPyTarget):
         if n_workers is None:
             self._energy_eval = SequentialEnergyEval(self._pdb.topology, self._system)
         elif isinstance(n_workers, int):
-            self._energy_eval = ParallelEnergyEval(self._pdb.topology, self._system)
+            self._energy_eval = ParallelEnergyEval(
+                self._pdb.topology, self._system, n_workers=n_workers
+            )
         else:
             raise TypeError
 
