@@ -443,6 +443,31 @@ def make_agnostic(
         return decorator
 
 
+def create_framework_dispatch(
+    impl_np: Callable | None = None,
+    impl_torch: Callable | None = None,
+    impl_jax: Callable | None = None,
+):
+    available_implementations: dict[FrameworkName, Callable] = []
+    if impl_np is not None:
+        available_implementations["numpy"] = impl_np
+    if impl_torch is not None:
+        available_implementations["pytorch"] = impl_torch
+    if impl_jax is not None:
+        available_implementations["jax"] = impl_jax
+
+    def fn(*args, **kwargs):
+        framework = detect_framework(args[0])
+        if framework not in available_implementations:
+            raise ValueError(
+                f"The function was called with an array-type from framework '{framework}' ({type(args[0]).__name__}) but is not specified"
+            )
+        fn = available_implementations[framework]
+        return fn(*args, **kwargs)
+
+    return fn
+
+
 if __name__ == "__main__":
     import torch
     import jax
