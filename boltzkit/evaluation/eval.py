@@ -371,7 +371,10 @@ def make_wandb_compatible(
 
         return v
 
-    return {k: transform(v) for k, v in data.items()}
+    def is_valid(v):
+        return isinstance(v, (float,int,PdfBuffer))
+
+    return {k: transform(v) for k, v in data.items() if is_valid(v)}
 
 
 def get_scalar_metrics(data: dict[str, ValueType]):
