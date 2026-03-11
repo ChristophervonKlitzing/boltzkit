@@ -108,7 +108,7 @@ class TorsionMarginalEval(Evaluation):
             )
 
             infill = self.vis_mode.id
-            key = f"torsion_marginals_{infill}_pdf"
+            key = f"torsion_marginal/{infill}_pdf"
             metrics[key] = pdf_buffer
 
         def flatten_marginals(
@@ -117,7 +117,7 @@ class TorsionMarginalEval(Evaluation):
         ):
             d: dict[str, Histogram1D | Histogram2D] = {}
             for i, (ram_hist, phi_hist, psi_hist) in enumerate(zip(*marginals)):
-                key_part = f"{prefix}_torsion_marginal_hist_{i}"
+                key_part = f"torsion_marginal/{prefix}_hist_{i}"
                 d[f"{key_part}_phi_psi"] = ram_hist
                 d[f"{key_part}_phi"] = phi_hist
                 d[f"{key_part}_psi"] = psi_hist
@@ -147,11 +147,11 @@ class TorsionMarginalEval(Evaluation):
             # evaluate all specified metrics on the angle histogram pairs
             for metric in self.histogram_metrics:
                 m_i = metric(true_hist, pred_hist)
-                metrics[f"torsion_marginal_{key}_{metric.id}_{i}"] = m_i
+                metrics[f"torsion_marginal/{key}_{metric.id}_{i}"] = m_i
                 summed_metrics[metric.id].append(m_i)
 
         for id, metric_values in summed_metrics.items():
-            metrics[f"torsion_marginal_{key}_{id}_mean"] = np.array(
+            metrics[f"torsion_marginal/{key}_{id}_mean"] = np.array(
                 metric_values
             ).mean()
 
@@ -210,9 +210,9 @@ class BondLengthEval(Evaluation):
             )
 
             if self.include_true_histograms:
-                metrics[f"bond_length_hist_{i}_true"] = hist_true
+                metrics[f"bond_length/hist_{i}_true"] = hist_true
             if self.include_pred_histograms:
-                metrics[f"bond_length_hist_{i}_pred"] = hist_pred
+                metrics[f"bond_length/hist_{i}_pred"] = hist_pred
 
             hists.append({f"true_{i}": hist_true, f"pred_{i}": hist_pred})
 
@@ -222,7 +222,7 @@ class BondLengthEval(Evaluation):
                 vis_mode=self.vis_mode,
                 progressbar_description="visualize bond lengths",
             )
-            metrics[f"bond_length_pdf"] = pdf
+            metrics[f"bond_length/pdf"] = pdf
 
         return metrics
 
@@ -272,9 +272,9 @@ class BondAngleEval(Evaluation):
             hist_pred = get_bond_angle_hist(pred[:, i])
 
             if self.include_true_histograms:
-                metrics[f"bond_angle_hist_{i}_true"] = hist_true
+                metrics[f"bond_angle/hist_{i}_true"] = hist_true
             if self.include_pred_histograms:
-                metrics[f"bond_angle_hist_{i}_pred"] = hist_pred
+                metrics[f"bond_angle/hist_{i}_pred"] = hist_pred
 
             hists.append({f"true_{i}": hist_true, f"pred_{i}": hist_pred})
 
@@ -284,7 +284,7 @@ class BondAngleEval(Evaluation):
                 vis_mode=self.vis_mode,
                 progressbar_description="visualize bond angles",
             )
-            metrics[f"bond_angles_pdf"] = pdf
+            metrics[f"bond_angle/pdf"] = pdf
 
         return metrics
 
@@ -334,9 +334,9 @@ class DihedralAngleEval(Evaluation):
             hist_pred = get_dihedral_angle_hist(pred[:, i])
 
             if self.include_true_histograms:
-                metrics[f"dihedral_angle_hist_{i}_true"] = hist_true
+                metrics[f"dihedral_angle/hist_{i}_true"] = hist_true
             if self.include_pred_histograms:
-                metrics[f"dihedral_angle_hist_{i}_pred"] = hist_pred
+                metrics[f"dihedral_angle/hist_{i}_pred"] = hist_pred
 
             hists.append({f"true_{i}": hist_true, f"pred_{i}": hist_pred})
 
@@ -346,7 +346,7 @@ class DihedralAngleEval(Evaluation):
                 vis_mode=self.vis_mode,
                 progressbar_description="visualize dihedral angles",
             )
-            metrics[f"dihedral_angles_pdf"] = pdf
+            metrics[f"dihedral_angle/pdf"] = pdf
 
         return metrics
 
@@ -396,7 +396,6 @@ class TicaEval(Evaluation):
         tica_proj_true = self._tica_model.project_from_cartesian(
             samples_true, self._topology
         )
-        print(tica_proj_true[0])
         tica_hist_true = get_tica_hist(tica_proj_true)
 
         # pred
@@ -412,13 +411,13 @@ class TicaEval(Evaluation):
                 vis_mode=self.vis_mode,
                 clip_pred_to_true_range=self.plot_pred_in_true_range,
             )
-            metrics["tica_pdf"] = tica_pdf_buffer
+            metrics["tica/pdf"] = tica_pdf_buffer
 
         if self.include_pred_histogram:
-            metrics["tica_hist_pred"] = tica_hist_pred
+            metrics["tica/hist_pred"] = tica_hist_pred
 
         if self.include_true_histogram:
-            metrics["tica_hist_true"] = tica_hist_true
+            metrics["tica/hist_true"] = tica_hist_true
 
         return metrics
 
@@ -427,7 +426,7 @@ if __name__ == "__main__":
     from boltzkit.targets.boltzmann import MolecularBoltzmann
     from boltzkit.utils.pdf import plot_pdf
     from boltzkit.evaluation.eval import EvalData, EnergyHistEval, run_eval
-    from boltzkit.evaluation.eval import get_pdfs
+    from boltzkit.evaluation.eval import get_pdfs, make_wandb_compatible
 
     bm = MolecularBoltzmann(
         "datasets/chrklitz99/test_system", length_unit="nanometer", n_workers=2
@@ -450,20 +449,22 @@ if __name__ == "__main__":
 
     mol_eval_pipeline = []
 
-    # torsion_eval = TorsionMarginalEval(topology, vis_mode=plot_as_log_density)
-    # mol_eval_pipeline.append(torsion_eval)
+    torsion_eval = TorsionMarginalEval(topology, vis_mode=plot_as_log_density)
+    mol_eval_pipeline.append(torsion_eval)
 
     tica_eval = TicaEval(topology, tica_model, vis_mode=plot_as_log_density)
     mol_eval_pipeline.append(tica_eval)
 
-    # ic_eval = DihedralAngleEval(topology, z_matrix)
-    # mol_eval_pipeline.append(ic_eval)
+    ic_eval = DihedralAngleEval(topology, z_matrix)
+    mol_eval_pipeline.append(ic_eval)
 
-    # energy_hist_eval = EnergyHistEval()
-    # mol_eval_pipeline.append(energy_hist_eval)
+    energy_hist_eval = EnergyHistEval()
+    mol_eval_pipeline.append(energy_hist_eval)
 
     metrics = run_eval(eval_data, evals=mol_eval_pipeline)
-    print(metrics)
+
+    metrics_wandb = make_wandb_compatible(metrics)
+    print(metrics_wandb)
 
     pdfs = get_pdfs(metrics)
     for key, pdf in pdfs.items():

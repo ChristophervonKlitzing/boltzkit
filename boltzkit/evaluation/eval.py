@@ -213,14 +213,14 @@ class EnergyHistEval(Evaluation):
         true_energy_hist = get_reduced_energy_hist(data.true_samples_target_log_prob)
 
         if self.include_pred_histogram:
-            metrics["pred_energy_hist"] = pred_energy_hist
-            metrics["true_energy_hist"] = true_energy_hist
+            metrics["energy_hist/pred"] = pred_energy_hist
+            metrics["energy_hist/true"] = true_energy_hist
 
         if self.include_pdf:
             energy_hist_pdf = visualize_energy_hist_dual(
                 pred_energy_hist=pred_energy_hist, true_energy_hist=true_energy_hist
             )
-            metrics["energy_hist_pdf"] = energy_hist_pdf
+            metrics["energy_hist/pdf"] = energy_hist_pdf
 
         return metrics
 
@@ -352,24 +352,25 @@ def run_eval(
 
 
 def make_wandb_compatible(
-    data: dict[str, ValueType],
-    dpi: int = 50,
+    data: dict[str, ValueType], dpi: int = 100, update_keys: bool = True
 ):
     """
     Convert all elements in the dict into wandb-compatible items (e.g., pdf (in the form of a binary buffer) -> wandb.Image).
     This function requires the installation of the pip `wandb` package.
     """
 
-    def transform(v):
+    def transform(k: str, v):
         if isinstance(v, PdfBuffer):
+            if update_keys:
+                k = k.replace("pdf", "vis")
             v = pdf_to_wandb_image(v, dpi=dpi)
 
-        return v
+        return k, v
 
     def is_valid(v):
         return isinstance(v, (float, int, PdfBuffer))
 
-    return {k: transform(v) for k, v in data.items() if is_valid(v)}
+    return dict((transform(k, v) for k, v in data.items() if is_valid(v)))
 
 
 def get_scalar_metrics(data: dict[str, ValueType]):
