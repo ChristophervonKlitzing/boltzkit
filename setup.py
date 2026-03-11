@@ -19,10 +19,10 @@ def parse_requirements(file_name: str):
 setup(
     name="boltzkit",
     version=__version__,
-    description="Boltzmann Kit",
+    description="Package to quickly setup and evaluate Boltzmann densities and setup evaluation pipelines.",
     url="https://github.com/ChristophervonKlitzing/boltzkit",
     keywords="",
-    packages=find_packages(),
+    packages=find_packages(exclude=["tests"]),
     include_package_data=True,
     author="Denis Blessing, Henrik Schopmans, Christopher von Klitzing",
     install_requires=parse_requirements("requirements.txt"),
