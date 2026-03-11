@@ -63,14 +63,21 @@ def visualize_tica_true_and_pred(
     tica_hist_pred: Histogram2D,
     vis_mode: VisualizationMode = plot_as_log_density,
     show: bool = False,
+    clip_pred_to_true_range: bool = True,
 ):
     fig, axes = plt.subplots(ncols=2, figsize=(7, 3))
 
     visualize_tica(tica_hist_true, vis_mode=vis_mode, ax=axes[0])
-    axes[0].set_title("True")
+    true_ax: plt.Axes = axes[0]
+    true_ax.set_title("True")
 
     visualize_tica(tica_hist_pred, vis_mode=vis_mode, ax=axes[1])
-    axes[1].set_title("Pred")
+    pred_ax: plt.Axes = axes[1]
+    pred_ax.set_title("Pred")
+
+    if clip_pred_to_true_range:
+        pred_ax.set_xbound(*true_ax.get_xbound())
+        pred_ax.set_ybound(*true_ax.get_ybound())
 
     pdf = matplotlib_to_pdf_buffer(fig)
 

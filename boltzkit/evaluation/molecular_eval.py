@@ -362,6 +362,7 @@ class TicaEval(Evaluation):
         include_pdf: bool = True,
         include_true_histogram: bool = True,
         include_pred_histogram: bool = True,
+        plot_pred_in_true_range: bool = True,
     ):
         super().__init__()
         self._topology = topology
@@ -380,6 +381,7 @@ class TicaEval(Evaluation):
         self.include_pdf = include_pdf
         self.include_true_histogram = include_true_histogram
         self.include_pred_histogram = include_pred_histogram
+        self.plot_pred_in_true_range = plot_pred_in_true_range
 
     def _eval(self, data):
         tica_metrics = self._get_tica_metrics(
@@ -408,6 +410,7 @@ class TicaEval(Evaluation):
                 tica_hist_true=tica_hist_true,
                 tica_hist_pred=tica_hist_pred,
                 vis_mode=self.vis_mode,
+                clip_pred_to_true_range=self.plot_pred_in_true_range,
             )
             metrics["tica_pdf"] = tica_pdf_buffer
 
@@ -437,7 +440,7 @@ if __name__ == "__main__":
     gt_samples = bm.load_dataset(T=300.0, type="val")[:5_000]
 
     gt_samples = gt_samples.reshape(gt_samples.shape[0], -1)
-    pred_samples = gt_samples  # gt_samples + 0.001 * np.random.randn(*gt_samples.shape)
+    pred_samples = gt_samples + 0.01 * np.random.randn(*gt_samples.shape)
     eval_data = EvalData(
         samples_true=gt_samples,
         samples_pred=pred_samples,

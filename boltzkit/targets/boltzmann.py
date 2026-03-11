@@ -146,7 +146,7 @@ class MolecularBoltzmann(NumPyTarget):
         scores = self._forces_to_score(forces)
         return scores
 
-    def _numpy_energy_and_forces(self, x):
+    def get_energy_and_forces_numpy(self, x: np.ndarray):
         x_nm = x * self._length_scale
         energy, forces_nm = self.energy_eval.evaluate_batch(x_nm)
         forces = forces_nm * self._length_scale
