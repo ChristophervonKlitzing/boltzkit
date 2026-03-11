@@ -46,19 +46,19 @@ class NpyRecorderHook(SimulationHook):
 
     def action(self, context: OMMTReplicas) -> None:
         if self.curr_posis is None:
-            self.curr_posis = context.get_all_positions_as_numpy(length_unit="angstrom")
+            self.curr_posis = context.get_all_positions_as_numpy()
             if self.save_traj_of_replicas is not None:
                 self.curr_posis = self.curr_posis[self.save_traj_of_replicas, ...]
             self.curr_posis = self.curr_posis[np.newaxis, ...]
         else:
             if self.save_traj_of_replicas is not None:
-                self.curr_posis[...] = context.get_all_positions_as_numpy(
-                    length_unit="angstrom"
-                )[np.newaxis, self.save_traj_of_replicas, ...]
+                self.curr_posis[...] = context.get_all_positions_as_numpy()[
+                    np.newaxis, self.save_traj_of_replicas, ...
+                ]
             else:
-                self.curr_posis[...] = context.get_all_positions_as_numpy(
-                    length_unit="angstrom"
-                )[np.newaxis, ...]
+                self.curr_posis[...] = context.get_all_positions_as_numpy()[
+                    np.newaxis, ...
+                ]
 
         if self.buffer is None:
             self.buffer = np.empty(

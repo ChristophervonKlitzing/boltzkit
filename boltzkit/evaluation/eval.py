@@ -274,14 +274,6 @@ class ReverseLogWeightsEval(Evaluation):
         return metrics
 
 
-COMMON_EVALS = [
-    EnergyHistEval(),
-    NllEval(),
-    ModelShannonEntropyEval(),
-    ReverseLogWeightsEval(),
-]
-
-
 def _to_list(
     obj: (
         list[Evaluation | tuple[Evaluation, str]] | Evaluation | tuple[Evaluation, str]
@@ -338,9 +330,12 @@ def update_dict_with_id(target: dict, new_data: dict, idx: int) -> dict:
 def run_eval(
     data: EvalData,
     *,
-    evals: list[Evaluation | tuple[Evaluation]] = COMMON_EVALS,
+    evals: list[Evaluation | tuple[Evaluation]] = [],
     skip_on_missing_data: bool = True,
 ) -> dict[str, ValueType]:
+    if len(evals) == 0:
+        warnings.warn("Empty evaluation pipeline -> running no evaluations")
+
     eval_list = _to_list(evals)
 
     all_metrics = {}
@@ -372,7 +367,7 @@ def make_wandb_compatible(
         return v
 
     def is_valid(v):
-        return isinstance(v, (float,int,PdfBuffer))
+        return isinstance(v, (float, int, PdfBuffer))
 
     return {k: transform(v) for k, v in data.items() if is_valid(v)}
 
@@ -447,10 +442,12 @@ if __name__ == "__main__":
         pred_samples_model_log_prob=pred_samples_model_log_prob,
     )
 
+    pipeline = [EnergyHistEval()]
+
     # -------------------------
     # Run evaluation
     # -------------------------
-    metrics = run_eval(data)
+    metrics = run_eval(data, evals=pipeline)
 
     # -------------------------
     # Print results

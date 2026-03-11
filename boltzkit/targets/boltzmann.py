@@ -19,11 +19,9 @@ from openmm import app
 import openmm as mm
 from openmm import unit
 
+from boltzkit.utils.molecular.tica import TicaModelWithLengthScale
 from boltzkit.utils.molecular.z_matrix_factory import ZMatrixFactory
 import mdtraj as md
-
-import deeptime as dt
-import pickle
 
 
 class MolecularBoltzmann(NumPyTarget):
@@ -31,7 +29,7 @@ class MolecularBoltzmann(NumPyTarget):
         self,
         path: str,
         n_workers: None | int = -1,
-        length_unit: Literal["angstrom", "nanometer"] = "nanometer",
+        length_unit: Literal["angstrom", "nanometer"] | float = "nanometer",
         # energy_transform: FrameworkAgnosticFunction | None = None,
         **kwargs,
     ):
@@ -51,11 +49,11 @@ class MolecularBoltzmann(NumPyTarget):
 
         if isinstance(length_unit, str):
             if length_unit == "angstrom":
-                self.length_factor = 0.1
+                self._length_scale = 0.1
             elif length_unit == "nanometer":
-                self.length_factor = 1.0
+                self._length_scale = 1.0
         else:
-            self.length_factor = float(length_unit)
+            self._length_scale = float(length_unit)
 
     def _init_openmm(self):
         pdb_key = "pdb_file"
@@ -128,31 +126,41 @@ class MolecularBoltzmann(NumPyTarget):
         return score
 
     def _numpy_log_prob_and_score(self, x):
-        energy, forces = self.energy_eval.evaluate_batch(x)
+        x_nm = x * self._length_scale
+        energy, forces_nm = self.energy_eval.evaluate_batch(x_nm)
+        forces = forces_nm * self._length_scale
         log_probs = self._energy_to_log_prob(energy)
         scores = self._forces_to_score(forces)
         return log_probs, scores
 
     def _numpy_log_prob(self, x):
-        energy, _ = self.energy_eval.evaluate_batch(x, include_forces=False)
+        x_nm = x * self._length_scale
+        energy, _ = self.energy_eval.evaluate_batch(x_nm, include_forces=False)
         log_probs = self._energy_to_log_prob(energy)
         return log_probs
 
     def _numpy_score(self, x):
-        _, forces = self.energy_eval.evaluate_batch(x, include_energy=False)
+        x_nm = x * self._length_scale
+        _, forces_nm = self.energy_eval.evaluate_batch(x_nm, include_energy=False)
+        forces = forces_nm * self._length_scale
         scores = self._forces_to_score(forces)
         return scores
 
     def _numpy_energy_and_forces(self, x):
-        energy, forces = self.energy_eval.evaluate_batch(x)
+        x_nm = x * self._length_scale
+        energy, forces_nm = self.energy_eval.evaluate_batch(x_nm)
+        forces = forces_nm * self._length_scale
         return energy, forces
 
     def _numpy_energy(self, x):
-        energy, _ = self.energy_eval.evaluate_batch(x, include_forces=False)
+        x_nm = x * self._length_scale
+        energy, _ = self.energy_eval.evaluate_batch(x_nm, include_forces=False)
         return energy
 
     def _numpy_forces(self, x):
-        _, forces = self.energy_eval.evaluate_batch(x, include_energy=False)
+        x_nm = x * self._length_scale
+        _, forces_nm = self.energy_eval.evaluate_batch(x_nm, include_energy=False)
+        forces = forces_nm * self._length_scale
         return forces
 
     def get_z_matrix(self, allow_autogen=True) -> list[tuple[int, int, int, int]]:
@@ -193,25 +201,28 @@ class MolecularBoltzmann(NumPyTarget):
         return minimized_positions.reshape((self.dim,))
 
     def get_position_min_energy(self) -> np.ndarray:
+        pos_nm = None
         if self._pos_min_energy_cache is not None:
-            return self._pos_min_energy_cache
+            pos_nm = self._pos_min_energy_cache
+        else:
+            remote_path = self._repo.config.get("position_min_energy", None)
+            if remote_path is not None:
+                local_path = self._repo.load_file(remote_path)
+                pos_min_energy: np.ndarray = np.load(local_path)
+                self._pos_min_energy_cache = pos_min_energy.reshape((self.dim,))
+                pos_nm = self._pos_min_energy_cache
 
-        remote_path = self._repo.config.get("position_min_energy", None)
-        if remote_path is not None:
-            local_path = self._repo.load_file(remote_path)
-            pos_min_energy: np.ndarray = np.load(local_path)
-            self._pos_min_energy_cache = pos_min_energy.reshape((self.dim,))
-            return self._pos_min_energy_cache
+        if pos_nm is None:
+            import warnings
 
-        import warnings
+            warnings.warn(
+                "Could not find minimum energy position and use automatically determined position instead"
+            )
+            # Position min energy not specifed -> determine automatically
+            pos_nm = self._compute_position_min_energy()
+            self._pos_min_energy_cache = pos_nm
 
-        warnings.warn(
-            "Could not find minimum energy position and use automatically determined position instead"
-        )
-        # Position min energy not specifed -> determine automatically
-        pos_min_energy = self._compute_position_min_energy()
-        self._pos_min_energy_cache = pos_min_energy
-        return self._pos_min_energy_cache
+        return pos_nm / self._length_scale
 
     def get_tica_model(self):
         tica_key = "tica"
@@ -228,19 +239,19 @@ class MolecularBoltzmann(NumPyTarget):
             tica_remote_path = tica_file_list[0]
 
         tica_local_path = self._repo.load_file(tica_remote_path)
-        with open(tica_local_path, "rb") as f:
-            tica_model: dt.decomposition.TransferOperatorModel = pickle.load(f)
-
-        return tica_model
+        return TicaModelWithLengthScale.from_path(tica_local_path, self._length_scale)
 
     def load_dataset(
-        self, T: float | str, type: Literal["train", "val", "test"]
+        self, T: float | str | int, type: Literal["train", "val", "test"]
     ) -> np.ndarray | None:
         datasets: dict[str, dict[str, str]] | None = self._repo.config.get(
             "datasets", None
         )
         if datasets is None:
             return None
+
+        if isinstance(T, int):
+            T = float(T)
 
         temp_cfg = datasets.get(str(T), None)
         if temp_cfg is None:
@@ -251,7 +262,7 @@ class MolecularBoltzmann(NumPyTarget):
             return None
 
         local_fname = self._repo.load_file(dataset_remote_fname)
-        return np.load(local_fname)
+        return np.load(local_fname) / self._length_scale
 
     @property
     def spatial_dim(self) -> int:
@@ -295,11 +306,13 @@ def print_z_matrix(z_matrix: list[tuple[int, int, int, int]]):
 
 
 if __name__ == "__main__":
-    target = MolecularBoltzmann("datasets/chrklitz99/test_system")
+    target = MolecularBoltzmann(
+        "datasets/chrklitz99/test_system", length_unit="angstrom"
+    )
     # log_probs = target.get_log_prob(np.random.randn(5, 22, 3))
     # print(log_probs)
-    z_matrix = target.get_z_matrix()
-    print_z_matrix(z_matrix)
 
     pos_min_energy = target.get_position_min_energy()
-    print(pos_min_energy.shape)
+    # print(pos_min_energy)
+
+    print(target.load_dataset(300, "val")[0])

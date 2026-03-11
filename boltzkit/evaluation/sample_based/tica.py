@@ -1,7 +1,5 @@
 from matplotlib import pyplot as plt
 import numpy as np
-import mdtraj as md
-import deeptime as dt
 from boltzkit.utils.histogram import (
     Histogram2D,
     VisualizationMode,
@@ -10,45 +8,7 @@ from boltzkit.utils.histogram import (
 )
 from boltzkit.utils.pdf import matplotlib_to_pdf_buffer
 from boltzkit.evaluation.sample_based.wasserstein import get_euclidean_wasserstein_1_2
-from boltzkit.evaluation.sample_based._tica_help import _tica_features
 from boltzkit.utils.histogram import visualize_histogram_2d
-
-
-def get_tica_projections(
-    data: np.ndarray,
-    topology: md.Topology,
-    tica_model: dt.decomposition.TransferOperatorModel,
-) -> np.ndarray:
-    """
-    Project molecular trajectory data onto a trained TICA model.
-
-    Parameters
-    ----------
-    data : np.ndarray
-        Array of molecular coordinates of shape (batch, num_atoms*3) or (batch, num_atoms, 3),
-        where `batch` is the number of frames, and the last dimension corresponds to (x, y, z) coordinates.
-    topology : md.Topology
-        MDTraj topology describing the molecular system.
-    tica_model : deeptime.decomposition.TransferOperatorModel
-        Trained TICA model to transform features into TICA space.
-
-    Returns
-    -------
-    np.ndarray
-        TICA projections of shape (batch, n_tica_components),
-        where `n_tica_components` is the number of components in the TICA model.
-    """
-    data = data.reshape(data.shape[0], -1, 3)
-    ticas_list = []
-    for i in range(0, data.shape[0], 50000):
-        tica_features_batch = _tica_features(
-            md.Trajectory(
-                xyz=data[i : i + 50000],
-                topology=topology,
-            )
-        )
-        ticas_list.append(tica_model.transform(tica_features_batch))
-    return np.concatenate(ticas_list, axis=0)
 
 
 def get_tica_hist(
@@ -167,11 +127,9 @@ if __name__ == "__main__":
 
     gt_samples = bm.load_dataset(T=300.0, type="val")
 
-    tica_proj = get_tica_projections(gt_samples, topology, tica_model)
+    tica_proj = tica_model.project_from_cartesian(gt_samples, topology)
     tica_hist = get_tica_hist(tica_proj)
-    visualize_histogram_2d(
-        tica_hist, show=True, vmax=12.5, vis_mode=plot_as_log_density
-    )
+    visualize_histogram_2d(tica_hist, show=True, vis_mode=plot_as_log_density)
 
     tica_proj_true = tica_proj[:1000]
     tica_proj_pred = tica_proj[:1000] + 0.01 * np.random.randn(*tica_proj_true.shape)

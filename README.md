@@ -50,28 +50,31 @@ The evaluation is modularized. Input is an `EvalData` object with all-optional f
 ### Standard metrics
 To run the full evaluation pipeline with general domain-independent metrics, run:
 ```python
-from boltzkit.evaluation import run_eval, EvalData
+from boltzkit.evaluation import run_eval, EvalData, EnergyHistEval
 
 # Prepare data
 data = EvalData(...)
+eval_pipeline = [EnergyHistEval()]
 
-metrics = run_eval(data)
+metrics = run_eval(data, evals=eval_pipeline)
 ```
 
 ### Custom metrics
 To incorporate custom metrics, such as Ramachandran plots for torsion angle marginals in molecular tasks, you can pass one or multiple `Evaluation` objects.
 For example, to additionally include torsion marginals, use:
 ```python
-from boltzkit.evaluation import run_eval, COMMON_EVALS
+from boltzkit.evaluation import run_eval
 from boltzkit.evaluation.molecular_eval import TorsionMarginalEval
 
 # topology can for example be obtained via our `MolecularBoltzmann` target (available under `boltzkit.targets`).
 topology = ...
 molecular_eval = TorsionMarginalEval(topology) # also allows configuration of metrics via flags
 
+eval_pipeline = [molecular_eval]
+
 metrics = run_eval(
     data,
-    evals=COMMON_EVALS + [molecular_eval]
+    evals=eval_pipeline
 )
 ```
 
@@ -140,7 +143,7 @@ target.get_score(samples)
 ### Available Boltzmann targets
 - datasets/chrklitz99/test_system
 - TODO: missing alanine  dipeptide (test_system is basically that)
-- datasets/chrklitz99/alanine_tetrapeptide
+- TODO: datasets/chrklitz99/alanine_tetrapeptide
 - TODO: missing alanine hexapeptide
 - TODO: ELIL tetrapeptide
 

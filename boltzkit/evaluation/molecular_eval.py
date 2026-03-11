@@ -1,5 +1,6 @@
 from collections import defaultdict
-from typing import Callable
+from typing import Callable, Protocol
+import warnings
 
 from boltzkit.evaluation.sample_based.histogram_comparison import (
     HistogramMetric,
@@ -17,7 +18,6 @@ from boltzkit.evaluation.sample_based.torsion_marginals import (
 )
 from boltzkit.evaluation.sample_based.tica import (
     get_tica_hist,
-    get_tica_projections,
     visualize_tica_true_and_pred,
 )
 from boltzkit.utils.histogram import (
@@ -37,6 +37,9 @@ from boltzkit.utils.molecular.marginals import (
 from boltzkit.evaluation.eval import Evaluation, EvalData
 import mdtraj as md
 import numpy as np
+import deeptime as dt
+
+from boltzkit.utils.molecular.tica import TicaModelWithLengthScale
 
 
 class TorsionMarginalEval(Evaluation):
@@ -354,7 +357,7 @@ class TicaEval(Evaluation):
     def __init__(
         self,
         topology: md.Topology,
-        tica_model,
+        tica_model: TicaModelWithLengthScale | dt.decomposition.TransferOperatorModel,
         vis_mode: VisualizationMode = plot_as_log_density,
         include_pdf: bool = True,
         include_true_histogram: bool = True,
@@ -362,6 +365,15 @@ class TicaEval(Evaluation):
     ):
         super().__init__()
         self._topology = topology
+
+        if isinstance(tica_model, dt.decomposition.TransferOperatorModel):
+            warnings.warn(
+                "TICA model provided without an explicit length scale. "
+                "The code will assume that the TICA model and the sample data "
+                f"use the same length units (e.g., nm or Å). Use the wrapper '{TicaModelWithLengthScale.__name__}' instead."
+            )
+            tica_model = TicaModelWithLengthScale(tica_model)
+
         self._tica_model = tica_model
         self.vis_mode = vis_mode
 
@@ -379,14 +391,15 @@ class TicaEval(Evaluation):
         metrics = {}
 
         # true
-        tica_proj_true = get_tica_projections(
-            samples_true, self._topology, self._tica_model
+        tica_proj_true = self._tica_model.project_from_cartesian(
+            samples_true, self._topology
         )
+        print(tica_proj_true[0])
         tica_hist_true = get_tica_hist(tica_proj_true)
 
         # pred
-        tica_proj_pred = get_tica_projections(
-            samples_pred, self._topology, self._tica_model
+        tica_proj_pred = self._tica_model.project_from_cartesian(
+            samples_pred, self._topology
         )
         tica_hist_pred = get_tica_hist(tica_proj_pred)
 
@@ -413,15 +426,18 @@ if __name__ == "__main__":
     from boltzkit.evaluation.eval import EvalData, EnergyHistEval, run_eval
     from boltzkit.evaluation.eval import get_pdfs
 
-    bm = MolecularBoltzmann("datasets/chrklitz99/test_system")
+    bm = MolecularBoltzmann(
+        "datasets/chrklitz99/test_system", length_unit="nanometer", n_workers=2
+    )
 
     topology = bm.get_mdtraj_topology()
     tica_model = bm.get_tica_model()
     z_matrix = bm.get_z_matrix()
 
-    gt_samples = bm.load_dataset(T=300.0, type="val")[:2000]
-    gt_samples = gt_samples.reshape(gt_samples.shape[0], -1) * 0.1
-    pred_samples = gt_samples + 0.001 * np.random.randn(*gt_samples.shape)
+    gt_samples = bm.load_dataset(T=300.0, type="val")[:5_000]
+
+    gt_samples = gt_samples.reshape(gt_samples.shape[0], -1)
+    pred_samples = gt_samples  # gt_samples + 0.001 * np.random.randn(*gt_samples.shape)
     eval_data = EvalData(
         samples_true=gt_samples,
         samples_pred=pred_samples,
@@ -431,17 +447,17 @@ if __name__ == "__main__":
 
     mol_eval_pipeline = []
 
-    torsion_eval = TorsionMarginalEval(topology, vis_mode=plot_as_log_density)
-    mol_eval_pipeline.append(torsion_eval)
+    # torsion_eval = TorsionMarginalEval(topology, vis_mode=plot_as_log_density)
+    # mol_eval_pipeline.append(torsion_eval)
 
-    # tica_eval = TicaEval(topology, tica_model, vis_mode=plot_as_log_density)
-    # eval_nodes.append(tica_eval)
+    tica_eval = TicaEval(topology, tica_model, vis_mode=plot_as_log_density)
+    mol_eval_pipeline.append(tica_eval)
 
     # ic_eval = DihedralAngleEval(topology, z_matrix)
-    # eval_nodes.append(ic_eval)
+    # mol_eval_pipeline.append(ic_eval)
 
-    energy_hist_eval = EnergyHistEval()
-    mol_eval_pipeline.append(energy_hist_eval)
+    # energy_hist_eval = EnergyHistEval()
+    # mol_eval_pipeline.append(energy_hist_eval)
 
     metrics = run_eval(eval_data, evals=mol_eval_pipeline)
     print(metrics)

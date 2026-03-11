@@ -290,11 +290,11 @@ class ParallelEnergyEval:
         topology: app.Topology,
         system: mm.System,
         platform: Literal["CPU", "CUDA"] | None = None,
-        n_workers: int | None = None,
+        n_workers: int = -1,
     ):
         super().__init__()
 
-        if n_workers is None:
+        if n_workers == -1:
             n_workers = mp.cpu_count()
 
         self.n_workers = n_workers

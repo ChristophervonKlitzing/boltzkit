@@ -136,8 +136,7 @@ if __name__ == "__main__":
 
     gt_samples = bm.load_dataset(T=300.0, type="val")[:50_000]
 
-    # convert to Angstrom
-    gt_samples = np.reshape(gt_samples, (gt_samples.shape[0], -1)) * 0.1
+    gt_samples = np.reshape(gt_samples, (gt_samples.shape[0], -1))
 
     log_probs_true = bm.get_log_prob(gt_samples)
 

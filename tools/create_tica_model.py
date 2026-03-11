@@ -7,7 +7,7 @@ import mdtraj as md
 import numpy as np
 
 from boltzkit.evaluation.sample_based.tica import visualize_tica, get_tica_hist
-from boltzkit.utils.molecular.tica import create_tica_model, get_tica_features
+from boltzkit.utils.molecular.tica import create_deeptime_tica_model, get_tica_features
 
 from boltzkit.targets.boltzmann import MolecularBoltzmann
 from boltzkit.utils.pdf import save_pdf
@@ -172,7 +172,7 @@ def tica_model_creator_tool(args):
             use_distances=not args.dont_use_distances,
         )
 
-        tica_model = create_tica_model(
+        tica_model = create_deeptime_tica_model(
             trajectory,
             lagtime=lag_n_frames,
             dim=2,
