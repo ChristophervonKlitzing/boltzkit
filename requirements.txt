@@ -1,4 +1,3 @@
-openmm
 mdtraj
 numpy<2 # for now, openmm is only compiled for numpy<2
 scipy
