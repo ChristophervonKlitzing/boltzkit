@@ -3,8 +3,6 @@ channels:
   - conda-forge
 dependencies:
   - python==3.11.8
-  - openmm=8.0.0
-  - openmmtools=0.23.1
   - pip
   - pip:
       - -e .
