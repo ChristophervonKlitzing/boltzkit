@@ -420,6 +420,6 @@ if __name__ == "__main__":
     run_remd(
         args,
         system.get_openmm_system(),
-        system._pdb.getPositions(asNumpy=True),
+        system.get_position_min_energy().reshape(-1, 3),
         platform=args.platform,
     )
