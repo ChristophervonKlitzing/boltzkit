@@ -165,3 +165,7 @@ python -m unittest tests.demo
 ## Create unit test
 test files need to start with `test_` to be discoverable.
 
+
+# TODOs
+- Chirality filtering
+- Test data augmentation

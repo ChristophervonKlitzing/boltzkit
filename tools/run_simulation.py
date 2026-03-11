@@ -136,7 +136,7 @@ def parse_args():
 
     if args.write_checkpoint_every_ns is not None:
         checkpoint_interval_ps = args.write_checkpoint_every_ns * 1000  # ns to ps
-        if checkpoint_interval_ps % args.rec_interval != 0:
+        if int(checkpoint_interval_ps * 1000) % int(args.rec_interval * 1000) != 0:
             raise ValueError(
                 f"Checkpoint interval ({args.write_checkpoint_every_ns} ns = {checkpoint_interval_ps} ps) "
                 f"must be a multiple of recording interval ({args.rec_interval} ps)."
