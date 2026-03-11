@@ -5,6 +5,7 @@ import warnings
 from boltzkit.evaluation.sample_based.histogram_comparison import (
     HistogramMetric,
     get_histogram_fwd_kullback_leibler,
+    get_histogram_metrics,
 )
 from boltzkit.evaluation.sample_based.internal_coordinate_eval import (
     get_bond_angle_hist,
@@ -95,8 +96,12 @@ class TorsionMarginalEval(Evaluation):
             marginals_pred_2d = torsion_marginals_pred[0]
 
             metrics.update(
-                self._get_histogram_metrics(
-                    marginals_true_2d, marginals_pred_2d, "phi_psi"
+                get_histogram_metrics(
+                    self.histogram_metrics,
+                    marginals_true_2d,
+                    marginals_pred_2d,
+                    group="torsion_marginals",
+                    h_type="phi_psi",
                 ),
             )
 
@@ -108,7 +113,7 @@ class TorsionMarginalEval(Evaluation):
             )
 
             infill = self.vis_mode.id
-            key = f"torsion_marginal/{infill}_pdf"
+            key = f"torsion_marginals/{infill}_pdf"
             metrics[key] = pdf_buffer
 
         def flatten_marginals(
@@ -117,7 +122,7 @@ class TorsionMarginalEval(Evaluation):
         ):
             d: dict[str, Histogram1D | Histogram2D] = {}
             for i, (ram_hist, phi_hist, psi_hist) in enumerate(zip(*marginals)):
-                key_part = f"torsion_marginal/{prefix}_hist_{i}"
+                key_part = f"torsion_marginals/{prefix}_hist_{i}"
                 d[f"{key_part}_phi_psi"] = ram_hist
                 d[f"{key_part}_phi"] = phi_hist
                 d[f"{key_part}_psi"] = psi_hist
@@ -130,30 +135,6 @@ class TorsionMarginalEval(Evaluation):
         if self.include_pred_histograms:
             flattened_marginals_pred = flatten_marginals(torsion_marginals_pred, "pred")
             metrics.update(flattened_marginals_pred)
-
-        return metrics
-
-    def _get_histogram_metrics(
-        self,
-        true: list[Histogram2D],
-        pred: list[Histogram2D],
-        key: str,
-    ):
-        metrics = {}
-        summed_metrics: dict[str, list[float]] = defaultdict(list)
-
-        # Iterate over the torsion backbone angle pairs
-        for i, (true_hist, pred_hist) in enumerate(zip(true, pred)):
-            # evaluate all specified metrics on the angle histogram pairs
-            for metric in self.histogram_metrics:
-                m_i = metric(true_hist, pred_hist)
-                metrics[f"torsion_marginal/{key}_{metric.id}_{i}"] = m_i
-                summed_metrics[metric.id].append(m_i)
-
-        for id, metric_values in summed_metrics.items():
-            metrics[f"torsion_marginal/{key}_{id}_mean"] = np.array(
-                metric_values
-            ).mean()
 
         return metrics
 
@@ -210,9 +191,9 @@ class BondLengthEval(Evaluation):
             )
 
             if self.include_true_histograms:
-                metrics[f"bond_length/hist_{i}_true"] = hist_true
+                metrics[f"bond_lengths/hist_{i}_true"] = hist_true
             if self.include_pred_histograms:
-                metrics[f"bond_length/hist_{i}_pred"] = hist_pred
+                metrics[f"bond_lengths/hist_{i}_pred"] = hist_pred
 
             hists.append({f"true_{i}": hist_true, f"pred_{i}": hist_pred})
 
@@ -222,7 +203,7 @@ class BondLengthEval(Evaluation):
                 vis_mode=self.vis_mode,
                 progressbar_description="visualize bond lengths",
             )
-            metrics[f"bond_length/pdf"] = pdf
+            metrics[f"bond_lengths/pdf"] = pdf
 
         return metrics
 
@@ -272,9 +253,9 @@ class BondAngleEval(Evaluation):
             hist_pred = get_bond_angle_hist(pred[:, i])
 
             if self.include_true_histograms:
-                metrics[f"bond_angle/hist_{i}_true"] = hist_true
+                metrics[f"bond_angles/hist_{i}_true"] = hist_true
             if self.include_pred_histograms:
-                metrics[f"bond_angle/hist_{i}_pred"] = hist_pred
+                metrics[f"bond_angles/hist_{i}_pred"] = hist_pred
 
             hists.append({f"true_{i}": hist_true, f"pred_{i}": hist_pred})
 
@@ -284,7 +265,7 @@ class BondAngleEval(Evaluation):
                 vis_mode=self.vis_mode,
                 progressbar_description="visualize bond angles",
             )
-            metrics[f"bond_angle/pdf"] = pdf
+            metrics[f"bond_angles/pdf"] = pdf
 
         return metrics
 
@@ -300,6 +281,11 @@ class DihedralAngleEval(Evaluation):
         include_pdfs: bool = True,
         include_true_histograms: bool = False,
         include_pred_histograms: bool = False,
+        histogram_metrics: tuple[HistogramMetric] = [
+            get_histogram_fwd_kullback_leibler
+        ],
+        include_individual_hist_metrics: bool = False,
+        include_aggregated_hist_metrics: bool = True,
     ):
         super().__init__()
 
@@ -311,6 +297,10 @@ class DihedralAngleEval(Evaluation):
         self.include_pdfs = include_pdfs
         self.include_true_histograms = include_true_histograms
         self.include_pred_histograms = include_pred_histograms
+
+        self.histogram_metrics = histogram_metrics
+        self.include_individual_hist_metrics = include_individual_hist_metrics
+        self.include_aggregated_hist_metrics = include_aggregated_hist_metrics
 
     def _eval(self, data: EvalData):
         metrics = {}
@@ -328,25 +318,46 @@ class DihedralAngleEval(Evaluation):
         assert true.shape == pred.shape
         n_marginals = true.shape[1]
 
+        true_hists = []
+        pred_hists = []
         hists: list[dict[str, Histogram1D]] = []
         for i in range(n_marginals):
             hist_true = get_dihedral_angle_hist(true[:, i])
             hist_pred = get_dihedral_angle_hist(pred[:, i])
 
             if self.include_true_histograms:
-                metrics[f"dihedral_angle/hist_{i}_true"] = hist_true
+                metrics[f"dihedral_angles/hist_{i}_true"] = hist_true
             if self.include_pred_histograms:
-                metrics[f"dihedral_angle/hist_{i}_pred"] = hist_pred
+                metrics[f"dihedral_angles/hist_{i}_pred"] = hist_pred
 
+            # Save for visualization
             hists.append({f"true_{i}": hist_true, f"pred_{i}": hist_pred})
 
+            # Save for histogram metrics
+            true_hists.append(hist_true)
+            pred_hists.append(hist_pred)
+
+        # Visualize
         if self.include_pdfs:
             pdf = visualize_histograms(
                 hists,
                 vis_mode=self.vis_mode,
                 progressbar_description="visualize dihedral angles",
             )
-            metrics[f"dihedral_angle/pdf"] = pdf
+            metrics[f"dihedral_angles/pdf"] = pdf
+
+        # Compute metrics on histograms
+        if len(self.histogram_metrics) > 0:
+            metrics.update(
+                get_histogram_metrics(
+                    self.histogram_metrics,
+                    true_hists,
+                    pred_hists,
+                    group="dihedral_angles",
+                    include_individual=self.include_individual_hist_metrics,
+                    include_aggregated=self.include_aggregated_hist_metrics,
+                ),
+            )
 
         return metrics
 
