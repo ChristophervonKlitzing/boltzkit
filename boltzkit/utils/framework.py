@@ -243,7 +243,7 @@ def make_agnostic_simple(*, implementation: FrameworkName):
             out_impl = value_fn(x_impl)
             out_np = to_numpy_recursive(out_impl, implementation)
 
-            if is_torch_tensor:
+            if is_torch_tensor(x):
                 device = x.device
             else:
                 device = None
