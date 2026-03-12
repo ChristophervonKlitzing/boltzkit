@@ -68,7 +68,7 @@ class EvalData:
                 setattr(self, k, squeeze_last_dim(v))
 
         self._check_type(populated_fields)
-        # self._check_same_batch_size(populated_fields)
+        self._check_same_batch_size()
         self._check_sample_shapes(populated_fields)
 
     def _get_populated_fields(self) -> dict[str, np.ndarray]:
@@ -91,10 +91,20 @@ class EvalData:
                 f"The following fields must be np.ndarray but are not: {invalid}"
             )
 
-    def _check_same_batch_size(self, populated_fields: dict[str, np.ndarray]):
-        batch_sizes = {k: v.shape[0] for k, v in populated_fields.items()}
-        if len(set(batch_sizes.values())) != 1:
-            raise ValueError("... use keys and actual batch-sizes")
+    def _check_same_batch_size(self):
+        def _check_pair(samples: Optional[np.ndarray], log_probs: Optional[np.ndarray], name: str):
+            if samples is None or log_probs is None:
+                return
+            if samples.shape[0] != log_probs.shape[0]:
+                raise ValueError(
+                    f"Batch size mismatch for {name}: "
+                    f"samples batch={samples.shape[0]}, log_probs batch={log_probs.shape[0]}"
+                )
+        
+        _check_pair(self.samples_true, self.true_samples_target_log_prob, "true_samples_target_log_prob")
+        _check_pair(self.samples_true, self.true_samples_model_log_prob, "true_samples_model_log_prob")
+        _check_pair(self.samples_pred, self.pred_samples_target_log_prob, "pred_samples_target_log_prob")
+        _check_pair(self.samples_pred, self.pred_samples_model_log_prob, "pred_samples_model_log_prob")
 
     def _check_sample_shapes(self, populated_fields: dict[str, np.ndarray]):
         sample_shapes = {
