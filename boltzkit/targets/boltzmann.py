@@ -1,4 +1,5 @@
 from typing import Literal
+import warnings
 
 import numpy as np
 
@@ -28,11 +29,58 @@ class MolecularBoltzmann(NumPyTarget):
     def __init__(
         self,
         path: str,
+        *,
         n_workers: None | int = -1,
+        openmm_platform: Literal["CPU", "CUDA"] | None = "CPU",
         length_unit: Literal["angstrom", "nanometer"] | float = "nanometer",
         # energy_transform: FrameworkAgnosticFunction | None = None,
         **kwargs,
     ):
+        """
+        Wraps a molecular system for energy/log-density and force/score evaluation using OpenMM.
+
+        This class handles conversion of positions to the appropriate length scale
+        and sets up the OpenMM System from the given repository path, e.g., a Hugging Face
+        repository such as `datasets/chrklitz99/alanine_dipeptide`.
+
+        ### Number of workers and OpenMM platform
+
+        There are effectively two sensible modes for evaluation:
+
+        1. **CPU mode**: `openmm_platform="CPU"` and `n_workers=-1` or a positive integer
+        (performs batch evaluation in parallel across multiple processes).
+
+        2. **GPU mode**: `openmm_platform="CUDA"` and `n_workers=None`
+        (performs sequential batch evaluation on a single GPU).
+
+        If training itself is parallelized across multiple GPUs, mode 2 can be appropriate,
+        since sequential evaluation on each GPU may be faster than parallel evaluation across
+        multiple CPUs.
+
+        Parameters
+        ----------
+        path : str
+            Path to the repository that configures the system.
+        n_workers : int or None, optional, default=-1
+            Number of parallel workers for computations. -1 uses all available CPU cores,
+            None means sequential evaluation. Applies to all platforms, but using a GPU
+            (CUDA) with multiple workers triggers a warning because parallel evaluation
+            makes little sense on a single GPU.
+        openmm_platform : {"CPU", "CUDA"} or None, optional, default="CPU"
+            OpenMM computation platform to use. None lets OpenMM select CUDA if available,
+            with a fallback to CPU. Parallel evaluation (`n_workers`) always applies, but
+            the combinations CUDA + multiple workers will issue a warning.
+        length_unit : {"angstrom", "nanometer"} or float, optional, default="nanometer"
+            Scaling factor for positional units. If a string, must be "angstrom" or "nanometer".
+            If a float, interpreted as a custom scale.
+        **kwargs : dict
+            Additional arguments passed to the repository loader.
+        """
+        if openmm_platform != "CPU" and n_workers is not None:
+            warnings.warn(
+                f"Parallel energy & force evaluation ({n_workers=}) makes no sense when not using {openmm_platform=}"
+            )
+
         self._repo = CachedRepo(path, **kwargs)
         self._init_openmm()
 
@@ -43,6 +91,7 @@ class MolecularBoltzmann(NumPyTarget):
         super().__init__(dim)
 
         self._n_workers = n_workers
+        self._openmm_platform = openmm_platform
         self._energy_eval = None
 
         self._pos_min_energy_cache = None
@@ -97,10 +146,15 @@ class MolecularBoltzmann(NumPyTarget):
 
     def _init_energy_eval(self, n_workers: int | None):
         if n_workers is None:
-            self._energy_eval = SequentialEnergyEval(self._pdb.topology, self._system)
+            self._energy_eval = SequentialEnergyEval(
+                self._pdb.topology, self._system, platform=self._openmm_platform
+            )
         elif isinstance(n_workers, int):
             self._energy_eval = ParallelEnergyEval(
-                self._pdb.topology, self._system, n_workers=n_workers
+                self._pdb.topology,
+                self._system,
+                n_workers=n_workers,
+                platform=self._openmm_platform,
             )
         else:
             raise TypeError

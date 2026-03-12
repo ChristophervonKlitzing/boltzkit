@@ -204,7 +204,7 @@ class SequentialEnergyEval(EnergyEval):
         self,
         topology: app.Topology,
         system: mm.System,
-        platform: Literal["CPU", "CUDA"] | None = None,
+        platform: Literal["CPU", "CUDA"] | None = "CPU",
     ):
         super().__init__()
 
@@ -289,7 +289,7 @@ class ParallelEnergyEval:
         self,
         topology: app.Topology,
         system: mm.System,
-        platform: Literal["CPU", "CUDA"] | None = None,
+        platform: Literal["CPU", "CUDA"] | None = "CPU",
         n_workers: int = -1,
     ):
         super().__init__()
