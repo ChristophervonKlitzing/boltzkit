@@ -6,6 +6,15 @@ Python package for molecular Boltzmann and related densities. The package provid
 
 
 # Setup
+
+## Installation
+Run 
+```bash
+pip install git+https://github.com/ChristophervonKlitzing/boltzkit
+```
+
+
+## Development of boltzkit
 An environment with all dependencies can be installed in the following way:
 ```bash
 conda env create -f environment.yaml
@@ -15,6 +24,8 @@ To activate the environment:
 ```bash
 conda activate boltzkit
 ```
+
+
 
 
 
