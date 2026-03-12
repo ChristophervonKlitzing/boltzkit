@@ -1,5 +1,3 @@
-from collections import defaultdict
-from typing import Callable, Protocol
 import warnings
 
 from boltzkit.evaluation.sample_based.histogram_comparison import (
@@ -438,6 +436,7 @@ if __name__ == "__main__":
     from boltzkit.utils.pdf import plot_pdf
     from boltzkit.evaluation.eval import EvalData, EnergyHistEval, run_eval
     from boltzkit.evaluation.eval import get_pdfs, make_wandb_compatible
+    from boltzkit.evaluation.sample_based.histogram_comparison import get_histogram_jensen_shannon_divergence,
 
     bm = MolecularBoltzmann(
         "datasets/chrklitz99/test_system", length_unit="nanometer", n_workers=2
@@ -455,8 +454,8 @@ if __name__ == "__main__":
 
     pred_samples = val_dataset[:1_000]
     pred_samples = pred_samples.reshape(pred_samples.shape[0], -1)
-    pred_samples = pred_samples # + 0.01 * np.random.randn(*pred_samples.shape)
-    
+    pred_samples = pred_samples  # + 0.01 * np.random.randn(*pred_samples.shape)
+
     eval_data = EvalData(
         samples_true=true_samples,
         samples_pred=pred_samples,
@@ -466,23 +465,30 @@ if __name__ == "__main__":
 
     mol_eval_pipeline = []
 
-    torsion_eval = TorsionMarginalEval(topology, vis_mode=plot_as_log_density)
+    torsion_eval = TorsionMarginalEval(
+        topology,
+        vis_mode=plot_as_log_density,
+        histogram_metrics=[
+            get_histogram_fwd_kullback_leibler,
+            get_histogram_jensen_shannon_divergence,
+        ],
+    )
     mol_eval_pipeline.append(torsion_eval)
 
-    tica_eval = TicaEval(topology, tica_model, vis_mode=plot_as_log_density)
-    mol_eval_pipeline.append(tica_eval)
+    # tica_eval = TicaEval(topology, tica_model, vis_mode=plot_as_log_density)
+    # mol_eval_pipeline.append(tica_eval)
 
-    energy_hist_eval = EnergyHistEval()
-    mol_eval_pipeline.append(energy_hist_eval)
+    # energy_hist_eval = EnergyHistEval()
+    # mol_eval_pipeline.append(energy_hist_eval)
 
-    bond_length_eval = BondLengthEval(topology, z_matrix)
-    mol_eval_pipeline.append(bond_length_eval)
+    # bond_length_eval = BondLengthEval(topology, z_matrix)
+    # mol_eval_pipeline.append(bond_length_eval)
 
-    bond_angle_eval = BondAngleEval(topology, z_matrix)
-    mol_eval_pipeline.append(bond_angle_eval)
+    # bond_angle_eval = BondAngleEval(topology, z_matrix)
+    # mol_eval_pipeline.append(bond_angle_eval)
 
-    dihedral_angle_eval = DihedralAngleEval(topology, z_matrix)
-    mol_eval_pipeline.append(dihedral_angle_eval)
+    # dihedral_angle_eval = DihedralAngleEval(topology, z_matrix)
+    # mol_eval_pipeline.append(dihedral_angle_eval)
 
     metrics = run_eval(eval_data, evals=mol_eval_pipeline)
 
