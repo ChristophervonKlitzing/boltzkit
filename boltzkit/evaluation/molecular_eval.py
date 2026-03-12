@@ -436,7 +436,9 @@ if __name__ == "__main__":
     from boltzkit.utils.pdf import plot_pdf
     from boltzkit.evaluation.eval import EvalData, EnergyHistEval, run_eval
     from boltzkit.evaluation.eval import get_pdfs, make_wandb_compatible
-    from boltzkit.evaluation.sample_based.histogram_comparison import get_histogram_jensen_shannon_divergence,
+    from boltzkit.evaluation.sample_based.histogram_comparison import (
+        get_histogram_jensen_shannon_divergence,
+    )
 
     bm = MolecularBoltzmann(
         "datasets/chrklitz99/test_system", length_unit="nanometer", n_workers=2
