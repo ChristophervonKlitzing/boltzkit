@@ -1,20 +1,40 @@
-# boltzkit
-Python package for molecular Boltzmann and related densities. The package provides the target systems, utility for loading datasets, evaluation pipelines, chirality filtering, ...
+# The boltzkit package
+`boltzkit` is a Python package for working with molecular Boltzmann and related densities.
+It provides tools for defining target systems, loading datasets, running evaluation pipelines, and performing tasks such as chirality filtering.
 
-## Framework-agnostic
-`boltzkit` relies on NumPy wherever possible and deliberately avoids depending directly on frameworks like JAX or PyTorch, while still offering optional wrappers for them. This design ensures maximum flexibility and broad compatibility with any NumPy-based or NumPy-compatible machine learning framework.
+The package is designed to make it as simple as possible to:
+- evaluate target energies / log probabilities
+- compute forces / scores
+- evaluate predicted samples
+
+See the [Evaluation](#create-and-run-evaluation-pipeline) and 
+[Create Target Systems](#create-target-systems) sections.
+
+
+The `boltzkit` package is **framework-agnostic**! The package relies primarily on NumPy and deliberately avoids direct dependencies on machine learning frameworks such as JAX or PyTorch. Optional wrappers are provided for these frameworks when needed.
+
+This design ensures maximum flexibility and broad compatibility with any NumPy-based or NumPy-compatible machine learning framework.
 
 
 # Setup
 
 ## Installation
-Run 
+### OpenMM
+OpenMM can be installed via `pip` or `conda` and can depend on cuda. For this reason, openmm must be installed separately.
+
+For example, openmm can be installed via pip for CPU via:
+```bash
+pip install openmm
+```
+
+### boltzkit
+After installing OpenMM, the latest version of `boltzkit` can directly be installed from GitHub via:
 ```bash
 pip install git+https://github.com/ChristophervonKlitzing/boltzkit
 ```
 
 
-## Development of boltzkit
+## Development setup
 An environment with all dependencies can be installed in the following way:
 ```bash
 conda env create -f environment.yaml
@@ -58,35 +78,26 @@ The evaluation is modularized. Input is an `EvalData` object with all-optional f
 **Returns:**
 - The returned `metrics` object is a flat `dict` that maps strings to values. Values may be simple `float` or `int` types, but **can also be complex data objects** such as histograms or pdfs. Utilities for filtering and compatibility with Weights and Biases are also available.
 
-### Standard metrics
-To run the full evaluation pipeline with general domain-independent metrics, run:
+### Create and run evaluation pipeline
+To run an evaluation pipeline with energy histograms and torsion marginal metrics (e.g., Ramachandrans), run:
 ```python
 from boltzkit.evaluation import run_eval, EvalData, EnergyHistEval
+from boltzkit.evaluation.molecular_eval import TorsionMarginalEval
 
 # Prepare data
 data = EvalData(...)
-eval_pipeline = [EnergyHistEval()]
 
-metrics = run_eval(data, evals=eval_pipeline)
-```
 
-### Custom metrics
-To incorporate custom metrics, such as Ramachandran plots for torsion angle marginals in molecular tasks, you can pass one or multiple `Evaluation` objects.
-For example, to additionally include torsion marginals, use:
-```python
-from boltzkit.evaluation import run_eval
-from boltzkit.evaluation.molecular_eval import TorsionMarginalEval
-
-# topology can for example be obtained via our `MolecularBoltzmann` target (available under `boltzkit.targets`).
+# mdtraj.Topology can for example be obtained via our `MolecularBoltzmann` target (available under `boltzkit.targets`) or by loading a PDB file with mdtraj.
 topology = ...
-molecular_eval = TorsionMarginalEval(topology) # also allows configuration of metrics via flags
+torsion_eval = TorsionMarginalEval(topology) # allows additional configuration of metrics via flags
+energy_hist_eval = EnergyHistEval()
 
-eval_pipeline = [molecular_eval]
+# Create pipeline
+eval_pipeline = [energy_hist_eval, torsion_eval]
 
-metrics = run_eval(
-    data,
-    evals=eval_pipeline
-)
+# Run evaluation
+metrics = run_eval(data, evals=eval_pipeline)
 ```
 
 ### Additional info
@@ -150,6 +161,26 @@ target.get_log_prob(samples)
 target.get_log_prob_and_score(samples)
 target.get_score(samples)
 ```
+
+### Change length scale (Ångström, Nanometer, ...)
+
+Atomic coordinates (e.g., samples, scores, or forces) can be scaled arbitrarily. Internally, `MolecularBoltzmann` represents all coordinates in **nanometers**. The length scale can be configured when creating a target:
+
+```python
+target = MolecularBoltzmann(
+    "datasets/chrklitz99/alanine_dipeptide",
+    length_unit="angstrom"  # default: "nanometer"
+)
+```
+
+**Note:** When setting the length scale during target creation, the `target` API automatically adapts. All inputs and outputs (coordinates, forces, scores, etc.) will use the selected unit, making it easy to work in the selected unit.
+
+For this reason, we strongly recommend running the [evaluation](#create-and-run-evaluation-pipeline) together with `MolecularBoltzmann` targets. Otherwise, it is the user's responsibility to ensure that a consistent length scale is used throughout the evaluation.
+
+Alternatively, a positive real number can be passed to specify the coordinate scaling directly. For example:
+
+- `"nanometer"` corresponds to `length_unit = 1.0`
+- `"angstrom"` corresponds to `length_unit = 0.1`
 
 ### Available Boltzmann targets
 - datasets/chrklitz99/test_system
