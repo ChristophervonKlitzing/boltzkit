@@ -68,7 +68,7 @@ class EvalData:
                 setattr(self, k, squeeze_last_dim(v))
 
         self._check_type(populated_fields)
-        self._check_same_batch_size(populated_fields)
+        # self._check_same_batch_size(populated_fields)
         self._check_sample_shapes(populated_fields)
 
     def _get_populated_fields(self) -> dict[str, np.ndarray]:

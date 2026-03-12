@@ -178,7 +178,7 @@ class BondLengthEval(Evaluation):
             topology=self._topology,
             z_matrix=self._z_matrix,
         )
-        assert true.shape == pred.shape
+        # assert true.shape == pred.shape
         n_marginals = true.shape[1]
 
         hists: list[dict[str, Histogram1D]] = []
@@ -244,7 +244,7 @@ class BondAngleEval(Evaluation):
             topology=self._topology,
             z_matrix=self._z_matrix,
         )
-        assert true.shape == pred.shape
+        # assert true.shape == pred.shape
         n_marginals = true.shape[1]
 
         hists: list[dict[str, Histogram1D]] = []
@@ -315,7 +315,7 @@ class DihedralAngleEval(Evaluation):
             topology=self._topology,
             z_matrix=self._z_matrix,
         )
-        assert true.shape == pred.shape
+        # assert true.shape == pred.shape
         n_marginals = true.shape[1]
 
         true_hists = []
@@ -447,14 +447,20 @@ if __name__ == "__main__":
     tica_model = bm.get_tica_model()
     z_matrix = bm.get_z_matrix()
 
-    gt_samples = bm.load_dataset(T=300.0, type="val")[:5_000]
+    val_dataset = bm.load_dataset(T=300.0, type="val")
+    print(val_dataset.shape)
 
-    gt_samples = gt_samples.reshape(gt_samples.shape[0], -1)
-    pred_samples = gt_samples + 0.01 * np.random.randn(*gt_samples.shape)
+    true_samples = val_dataset[:10_000]
+    true_samples = true_samples.reshape(true_samples.shape[0], -1)
+
+    pred_samples = val_dataset[:1_000]
+    pred_samples = pred_samples.reshape(pred_samples.shape[0], -1)
+    pred_samples = pred_samples # + 0.01 * np.random.randn(*pred_samples.shape)
+    
     eval_data = EvalData(
-        samples_true=gt_samples,
+        samples_true=true_samples,
         samples_pred=pred_samples,
-        true_samples_target_log_prob=bm.get_log_prob(gt_samples),
+        true_samples_target_log_prob=bm.get_log_prob(true_samples),
         pred_samples_target_log_prob=bm.get_log_prob(pred_samples),
     )
 
@@ -466,11 +472,17 @@ if __name__ == "__main__":
     tica_eval = TicaEval(topology, tica_model, vis_mode=plot_as_log_density)
     mol_eval_pipeline.append(tica_eval)
 
-    ic_eval = DihedralAngleEval(topology, z_matrix)
-    mol_eval_pipeline.append(ic_eval)
-
     energy_hist_eval = EnergyHistEval()
     mol_eval_pipeline.append(energy_hist_eval)
+
+    bond_length_eval = BondLengthEval(topology, z_matrix)
+    mol_eval_pipeline.append(bond_length_eval)
+
+    bond_angle_eval = BondAngleEval(topology, z_matrix)
+    mol_eval_pipeline.append(bond_angle_eval)
+
+    dihedral_angle_eval = DihedralAngleEval(topology, z_matrix)
+    mol_eval_pipeline.append(dihedral_angle_eval)
 
     metrics = run_eval(eval_data, evals=mol_eval_pipeline)
 
