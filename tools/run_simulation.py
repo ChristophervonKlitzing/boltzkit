@@ -207,7 +207,7 @@ def run_remd(
         OUTPUT_DIR = final_output_dir
 
     os.makedirs(OUTPUT_DIR, exist_ok=True)
-    OUTPUT_PATH = f"{OUTPUT_DIR}/traj.npy"
+    OUTPUT_PATH = f"{OUTPUT_DIR}/traj.h5"
 
     # Resuming from a previous simulation
     resume_metadata = None
@@ -219,7 +219,7 @@ def run_remd(
         print(f"Checkpoint metadata: {resume_metadata}", flush=True)
 
         # Copy trajectory file from old directory to the new one
-        old_traj_path = os.path.join(args.resume_from_dir, "traj.npy")
+        old_traj_path = os.path.join(args.resume_from_dir, "traj.h5")
         if os.path.exists(old_traj_path):
             shutil.copy2(old_traj_path, OUTPUT_PATH)
             # Truncate trajectory to the number of frames at checkpoint time:
