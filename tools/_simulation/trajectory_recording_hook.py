@@ -12,6 +12,7 @@ from reform.simu_utils import (
 
 # from .numpy_append import NumpyAppendFile
 from .h5_append import H5AppendFile
+import h5py
 
 
 class H5RecorderHook(SimulationHook):
@@ -23,6 +24,7 @@ class H5RecorderHook(SimulationHook):
         buffer_size: int = 1000,
         dtype=np.float32,
         save_traj_of_replicas: list[int] | None = None,
+        dataset_name: str = "trajectory",
     ):
         assert (
             dtype is np.float32 or np.float64
@@ -30,6 +32,7 @@ class H5RecorderHook(SimulationHook):
 
         self.dtype = dtype
         self.npy_path = npy_path
+        self.dset_name = dataset_name
 
         self.buffer = None
         self.buffer_size = buffer_size
@@ -73,7 +76,7 @@ class H5RecorderHook(SimulationHook):
         self.current_buffer_pos += 1
 
         if self.current_buffer_pos == self.buffer_size:
-            with H5AppendFile(self.npy_path) as file:
+            with H5AppendFile(self.npy_path, dataset=self.dset_name) as file:
                 file.append(self.buffer)
             self.total_frames_written += self.current_buffer_pos
             self.current_buffer_pos = 0
@@ -82,7 +85,7 @@ class H5RecorderHook(SimulationHook):
 
     def flush(self):
         if self.buffer is not None and self.current_buffer_pos > 0:
-            with H5AppendFile(self.npy_path) as file:
+            with H5AppendFile(self.npy_path, dataset=self.dset_name) as file:
                 file.append(self.buffer[: self.current_buffer_pos])
             self.total_frames_written += self.current_buffer_pos
             self.current_buffer_pos = 0
@@ -159,34 +162,52 @@ def load_checkpoint_metadata(checkpoint_dir: str) -> dict:
         return json.load(f)
 
 
-def truncate_trajectory(traj_path: str, num_frames: int) -> None:
+def truncate_trajectory_h5(
+    traj_path: str, num_frames: int, dataset_name: str = "trajectory"
+) -> None:
     """
-    Truncate a trajectory file to the specified number of frames.
+    Truncate an HDF5 trajectory file to the specified number of frames.
 
     Args:
-        traj_path: Path to the trajectory .npy file.
+        traj_path: Path to the HDF5 (.h5) file.
         num_frames: Number of frames to keep.
+        dataset_name: Name of the dataset containing the trajectory.
     """
     if not os.path.exists(traj_path):
         raise FileNotFoundError(f"Trajectory file not found at {traj_path}")
 
-    traj = np.load(traj_path)
-    # Trajectory shape: (n_frames, n_replicas, n_atoms, 3)
-    if traj.shape[0] == num_frames:
-        print(
-            f"Trajectory already has exactly {num_frames} frames, no truncation needed."
-        )
-        return
-    elif traj.shape[0] < num_frames:
-        raise ValueError(
-            f"Cannot truncate trajectory to {num_frames} frames, only has {traj.shape[0]} frames. This is likely an error."
-        )
+    with h5py.File(traj_path, "r+") as f:
+        if dataset_name not in f:
+            raise KeyError(f"Dataset '{dataset_name}' not found in HDF5 file.")
 
-    print(
-        f"Truncating copied resume trajectory from {traj.shape[0]} to {num_frames} frames."
-    )
-    truncated_traj = traj[:num_frames]
-    np.save(traj_path, truncated_traj)
+        dset = f[dataset_name]
+        n_frames = dset.shape[0]
+
+        if n_frames == num_frames:
+            print(
+                f"Trajectory already has exactly {num_frames} frames, no truncation needed."
+            )
+            return
+        elif n_frames < num_frames:
+            raise ValueError(
+                f"Cannot truncate trajectory to {num_frames} frames, only has {n_frames} frames. Likely an error."
+            )
+
+        print(f"Truncating HDF5 trajectory from {n_frames} to {num_frames} frames.")
+
+        # Method: resize the dataset along the first dimension
+        if not dset.resizeable:
+            # If the dataset is not resizable, create a new truncated dataset
+            truncated_data = dset[:num_frames]
+            del f[dataset_name]
+            f.create_dataset(
+                dataset_name,
+                data=truncated_data,
+                maxshape=(None, *truncated_data.shape[1:]),
+            )
+        else:
+            # If dataset is resizable (maxshape[0] = None), just resize
+            dset.resize((num_frames, *dset.shape[1:]))
 
 
 def recording_hook_setup(
@@ -196,6 +217,7 @@ def recording_hook_setup(
     output_path: str,
     exchange_interval: float = 0.0,
     save_traj_of_replicas: list[int] | None = None,
+    dataset_name: str = "trajectory",
 ) -> tuple[int, H5RecorderHook]:
     """Calculate the recording and (optional) replica exchange intervals
     and register the correpsonding hooks in the given simulation object.
@@ -217,7 +239,10 @@ def recording_hook_setup(
     simu_steps = int(simu_time * 1_000 / TIME_STEP)
     recording_steps = int(recording_interval * 1_000 / TIME_STEP)
     record_hook = H5RecorderHook(
-        output_path, buffer_size=1000, save_traj_of_replicas=save_traj_of_replicas
+        output_path,
+        buffer_size=1000,
+        save_traj_of_replicas=save_traj_of_replicas,
+        dataset_name=dataset_name,
     )
     simu.register_regular_hook(record_hook, recording_steps)
     if exchange_interval > 0:

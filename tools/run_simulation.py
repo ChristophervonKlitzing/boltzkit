@@ -21,7 +21,7 @@ from tools._simulation.trajectory_recording_hook import (
     CheckpointHook,
     load_checkpoint_metadata,
     recording_hook_setup,
-    truncate_trajectory,
+    truncate_trajectory_h5,
 )
 import openmm as mm
 
@@ -157,6 +157,7 @@ def run_remd(
     SIMU_TIME = args.simu_time * 1000  # convert from ns to ps
     RECORDING_INTERVAL = args.rec_interval  # in ps
     EXCHANGE_INTERVAL = args.exchange_interval  # in ps
+    DATASET_NAME = "trajectory"  # key in the HDF5 file
 
     # Set up temperatures based on the temps argument
     if args.temps is None:
@@ -223,7 +224,11 @@ def run_remd(
         if os.path.exists(old_traj_path):
             shutil.copy2(old_traj_path, OUTPUT_PATH)
             # Truncate trajectory to the number of frames at checkpoint time:
-            truncate_trajectory(OUTPUT_PATH, resume_metadata["total_frames_written"])
+            truncate_trajectory_h5(
+                OUTPUT_PATH,
+                resume_metadata["total_frames_written"],
+                dataset_name=DATASET_NAME,
+            )
         else:
             raise FileNotFoundError(f"Trajectory file not found at {old_traj_path}")
 
@@ -332,6 +337,7 @@ def run_remd(
         output_path=OUTPUT_PATH,
         exchange_interval=EXCHANGE_INTERVAL,
         save_traj_of_replicas=args.save_traj_of_replicas,
+        dataset_name=DATASET_NAME,
     )
 
     observable_hook.set_re_hook(re_hook)
