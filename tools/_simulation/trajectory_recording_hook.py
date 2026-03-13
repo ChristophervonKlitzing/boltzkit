@@ -10,10 +10,11 @@ from reform.simu_utils import (
     SimulationHook,
 )
 
-from .numpy_append import NumpyAppendFile
+# from .numpy_append import NumpyAppendFile
+from .h5_append import H5AppendFile
 
 
-class NpyRecorderHook(SimulationHook):
+class H5RecorderHook(SimulationHook):
     """Recording the trajectory when called."""
 
     def __init__(
@@ -72,7 +73,7 @@ class NpyRecorderHook(SimulationHook):
         self.current_buffer_pos += 1
 
         if self.current_buffer_pos == self.buffer_size:
-            with NumpyAppendFile(self.npy_path) as file:
+            with H5AppendFile(self.npy_path) as file:
                 file.append(self.buffer)
             self.total_frames_written += self.current_buffer_pos
             self.current_buffer_pos = 0
@@ -81,7 +82,7 @@ class NpyRecorderHook(SimulationHook):
 
     def flush(self):
         if self.buffer is not None and self.current_buffer_pos > 0:
-            with NumpyAppendFile(self.npy_path) as file:
+            with H5AppendFile(self.npy_path) as file:
                 file.append(self.buffer[: self.current_buffer_pos])
             self.total_frames_written += self.current_buffer_pos
             self.current_buffer_pos = 0
@@ -101,7 +102,7 @@ class CheckpointHook(SimulationHook):
         self,
         simu: MultiTSimulation,
         output_dir: str,
-        npy_hook: NpyRecorderHook,
+        npy_hook: H5RecorderHook,
         time_step_fs: float,
     ):
         """
@@ -195,7 +196,7 @@ def recording_hook_setup(
     output_path: str,
     exchange_interval: float = 0.0,
     save_traj_of_replicas: list[int] | None = None,
-) -> tuple[int, NpyRecorderHook]:
+) -> tuple[int, H5RecorderHook]:
     """Calculate the recording and (optional) replica exchange intervals
     and register the correpsonding hooks in the given simulation object.
 
@@ -215,7 +216,7 @@ def recording_hook_setup(
     TIME_STEP = simu.get_time_step()
     simu_steps = int(simu_time * 1_000 / TIME_STEP)
     recording_steps = int(recording_interval * 1_000 / TIME_STEP)
-    record_hook = NpyRecorderHook(
+    record_hook = H5RecorderHook(
         output_path, buffer_size=1000, save_traj_of_replicas=save_traj_of_replicas
     )
     simu.register_regular_hook(record_hook, recording_steps)

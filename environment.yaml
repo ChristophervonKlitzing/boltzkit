@@ -6,4 +6,5 @@ dependencies:
   - openmm
   - pip
   - pip:
+      - h5py # optional dependency required for the REMD tool
       - -e .
