@@ -81,6 +81,7 @@ class WandbHook(SimulationHook):
         self._max_samples = max_samples
 
     def action(self, context: OMMTReplicas) -> None:
+        print("Log to wandb...")
         current_step = context.get_state(0).getStepCount()
 
         if not os.path.exists(self._traj_path):
@@ -88,12 +89,15 @@ class WandbHook(SimulationHook):
 
         with h5py.File(self._traj_path) as f:
             dset = f[self._dset_name]
+            traj_length = dset.shape[0]
             samples = np.copy(dset[-self._max_samples :])
             samples = samples[:, 0, :, :]
 
         result = run_eval(EvalData(samples_true=samples), evals=self._eval_pipeline)
         wandb_metrics = make_wandb_compatible(result, dpi=20)
+        wandb_metrics["trajectory_length"] = traj_length
         wandb.log(wandb_metrics, step=current_step)
+        print(f"Logged to wandb: {wandb_metrics}")
 
     def __str__(self) -> str:
         return "Hook for wandb reporting."
