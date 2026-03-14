@@ -333,7 +333,7 @@ def run_remd(
         wandb_hook = WandbHook(
             args, system=system, traj_path=OUTPUT_PATH, dataset_name=DATASET_NAME
         )
-        simu.register_regular_hook(wandb_hook, 50_000)
+        simu.register_regular_hook(wandb_hook, _simu_steps // 1000)
         signal.signal(signal.SIGINT, lambda *_: wandb_hook.finish)
     else:
         wandb_hook = None
