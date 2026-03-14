@@ -2,6 +2,7 @@ import argparse
 import os
 import shutil
 
+import signal
 import time
 from typing import Literal
 import uuid
@@ -23,6 +24,7 @@ from tools._simulation.trajectory_recording_hook import (
     recording_hook_setup,
     truncate_trajectory_h5,
 )
+
 import openmm as mm
 
 from boltzkit.targets.boltzmann import MolecularBoltzmann
@@ -127,6 +129,14 @@ def parse_args():
         default="CUDA",
         help="Platform to run MD on. Another option is 'CPU'.",
     )
+
+    parser.add_argument(
+        "--wandb_project",
+        type=str,
+        default=None,
+        help="The wandb project to log into. By default, this is None, meaning no wandb logging.",
+    )
+
     args = parser.parse_args()
 
     if args.starting_configuration is not None and args.pre_eq_time != 0.0:
@@ -147,11 +157,12 @@ def parse_args():
 
 def run_remd(
     args,
-    system: mm.System,
+    system: MolecularBoltzmann,
     initial_position: list[mm.Vec3] | np.ndarray,
     interface: Literal["single_threaded", "replicated_system"] = "single_threaded",
     platform: str = "CUDA",
 ):
+
     TIME_STEP = args.time_step  # in fs
     PRE_EQ_TIME = args.pre_eq_time * 1000  # convert from ns to ps
     SIMU_TIME = args.simu_time * 1000  # convert from ns to ps
@@ -253,8 +264,9 @@ def run_remd(
         "time_step_in_fs": TIME_STEP,
     }
 
+    mm_system = system.get_openmm_system()
     simu = simu_utils.MultiTSimulation(
-        system,
+        mm_system,
         TEMPS,
         interface=interface,
         integrator_params=integrator_params,
@@ -310,10 +322,21 @@ def run_remd(
         remaining_simu_steps = _simu_steps
 
     status_hook = StatusHook(total_steps=eq_steps + _simu_steps)
-    simu.register_regular_hook(status_hook, 50000)
+    simu.register_regular_hook(status_hook, 50_000)
 
     observable_hook = ObservablesHook(csv_path=f"{OUTPUT_DIR}/observables.csv")
-    simu.register_regular_hook(observable_hook, 100000)
+    simu.register_regular_hook(observable_hook, 100_000)
+
+    if args.wandb_project is not None:
+        from tools._simulation.wandb_hook import WandbHook
+
+        wandb_hook = WandbHook(
+            args, system=system, traj_path=OUTPUT_PATH, dataset_name=DATASET_NAME
+        )
+        simu.register_regular_hook(wandb_hook, 50_000)
+        signal.signal(signal.SIGINT, lambda *_: wandb_hook.finish)
+    else:
+        wandb_hook = None
 
     status_hook.start_timer()
     if eq_steps > 0:
@@ -408,6 +431,8 @@ def run_remd(
     print(f"Done. Elapsed time: {time.time() - start} s.", flush=True)
 
     npy_hook.flush()
+    if wandb_hook:
+        wandb_hook.finish()
 
     if OUTPUT_DIR != final_output_dir:
         print(
@@ -425,7 +450,7 @@ if __name__ == "__main__":
 
     run_remd(
         args,
-        system.get_openmm_system(),
+        system,
         system.get_position_min_energy().reshape(-1, 3),
         platform=args.platform,
     )
