@@ -4,6 +4,9 @@ import os
 from matplotlib import pyplot as plt
 from dataclasses import dataclass
 
+from PIL import Image
+import fitz  # PyMuPDF
+
 
 @dataclass
 class PdfBuffer:
@@ -66,13 +69,18 @@ def save_pdfs(pdfs: dict[str, PdfBuffer], dirpath: str) -> None:
         save_pdf(pdf_buffer, fpath)
 
 
-def pdf_to_pillow_image(pdf_buffer: PdfBuffer, dpi=50):
-    from pdf2image import convert_from_bytes
+def _pdf_bytesio_to_image_PyMuPDF(pdf_bytes: bytes, dpi: int):
+    with fitz.open(stream=pdf_bytes, filetype="pdf") as doc:
+        page = doc.load_page(0)
+        pix = page.get_pixmap(dpi=dpi)
+        img = Image.open(io.BytesIO(pix.tobytes("png")))
 
+    return img
+
+
+def pdf_to_pillow_image(pdf_buffer: PdfBuffer, dpi=50):
     # Convert first page to PIL image
-    images = convert_from_bytes(pdf_buffer.buffer.getvalue(), dpi=dpi)
-    pil_image = images[0]
-    return pil_image
+    return _pdf_bytesio_to_image_PyMuPDF(pdf_buffer.buffer.getvalue(), dpi=dpi)
 
 
 def pdf_to_wandb_image(pdf_buffer: PdfBuffer, dpi=50):
