@@ -20,6 +20,11 @@ import multiprocessing as mp
 kB_in_eV_per_K = 8.617333262145177e-05  # Boltzmann constant in eV/K
 kJ_per_mol_to_eV = 0.010364269656262174  # converts KJ/mol -> eV
 
+# repeated creation of new units through binary operators
+# can potentially result in indefinite memory growth.
+# -> define force unit outside of `evaluate_energy_single`, which will be called many times.
+force_unit = unit.kilojoule_per_mole / unit.nanometer
+
 
 @contextmanager
 def _silence_stderr():
@@ -120,7 +125,6 @@ def evaluate_energy_single(
         energy = None
 
     if include_forces:
-        force_unit = unit.kilojoule_per_mole / unit.nanometer
         forces = state.getForces().value_in_unit(force_unit)
         forces = vec3_list_to_numpy(forces)
         forces = forces * kJ_per_mol_to_eV
