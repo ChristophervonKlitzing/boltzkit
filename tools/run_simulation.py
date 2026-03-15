@@ -2,7 +2,6 @@ import argparse
 import os
 import shutil
 
-import signal
 import time
 from typing import Literal
 import uuid
@@ -334,7 +333,6 @@ def run_remd(
             args, system=system, traj_path=OUTPUT_PATH, dataset_name=DATASET_NAME
         )
         simu.register_regular_hook(wandb_hook, _simu_steps // 1000)
-        signal.signal(signal.SIGINT, lambda *_: wandb_hook.finish)
     else:
         wandb_hook = None
 
