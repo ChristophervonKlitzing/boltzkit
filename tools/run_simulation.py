@@ -273,6 +273,8 @@ def run_remd(
         platform=platform,
     )
 
+    planned_traj_length = int(SIMU_TIME / RECORDING_INTERVAL)
+
     print(
         f"Performing RE-MD simulation of {args.system} system\n",
         f"Temperatures: {repr(TEMPS)}\n",
@@ -281,6 +283,7 @@ def run_remd(
         f"Simulation time: {repr(SIMU_TIME)} ps ({args.simu_time} ns)\n",
         f"Pre-equilibration time: {repr(PRE_EQ_TIME)} ps ({args.pre_eq_time} ns)\n",
         f"Exchange interval: {repr(EXCHANGE_INTERVAL)} ps\n",
+        f"Planned trajectory length: {planned_traj_length:.2e}\n",
         f"Output path: {OUTPUT_PATH}\n",
         f"Platform: {platform}\n",
         flush=True,
@@ -299,7 +302,7 @@ def run_remd(
         print(f"Loaded checkpoint from {chkpt_path}", flush=True)
 
         eq_steps = 0  # No equilibration when resuming
-        _simu_steps = int(SIMU_TIME * 1000 / TIME_STEP)
+        _simu_steps = int(SIMU_TIME * 1000 / TIME_STEP)  # in fs
 
         # Calculate remaining steps from where we left off
         resumed_step = resume_metadata["current_step"]
