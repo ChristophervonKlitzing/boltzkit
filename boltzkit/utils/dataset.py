@@ -95,7 +95,7 @@ class Dataset:
         if kB_T <= 0:
             raise ValueError("kB_T must be positive")
 
-        self._check_same_batch_size(
+        self._dataset_size = self._check_same_batch_size(
             samples=samples,
             log_probs=log_probs,
             energies=energies,
@@ -138,6 +138,7 @@ class Dataset:
                     f"Batch size mismatch: expected first dimension {batch_size}, "
                     f"but '{key}' has shape {val.shape}."
                 )
+        return batch_size
 
     def _cast_1d(self, val: np.ndarray):
         if val is None:
@@ -172,7 +173,28 @@ class Dataset:
         )
 
     @property
-    def samples(self) -> np.ndarray | None:
+    def size(self):
+        return self._dataset_size
+
+    def __len__(self):
+        return self._dataset_size
+
+    def __get_sized_array(self, array: np.ndarray | None, length: int, array_type: str):
+        if not (length == -1 or length > 0):
+            raise ValueError(
+                f"The specified length must satisfy `length == -1 or length > 0` but got {length}"
+            )
+        if length > self.size:
+            raise ValueError(
+                f"The requested number of {array_type} ({length}) is larger than the dataset size ({self.size})"
+            )
+
+        if array is not None and length != -1:
+            return array[:length]
+        else:
+            return array
+
+    def get_samples(self, length: int = -1) -> np.ndarray | None:
         """
         Sample configurations.
 
@@ -181,10 +203,9 @@ class Dataset:
         ndarray or None
             Array with shape (batch, d), or ``None`` if no samples were provided.
         """
-        return self._samples
+        return self.__get_sized_array(self._samples, length, "samples")
 
-    @property
-    def log_probs(self) -> np.ndarray | None:
+    def get_log_probs(self, length: int = -1) -> np.ndarray | None:
         """
         Log-probabilities of the samples.
 
@@ -199,16 +220,17 @@ class Dataset:
             Array with shape (batch,), or ``None`` if neither energies nor
             log-probabilities are available.
         """
+        log_probs = None
+
         if self._log_probs is not None:
-            return self._log_probs
+            log_probs = self._log_probs
 
         if self._energies is not None:
-            return -self._energies / self._kB_T
+            log_probs = -self._energies / self._kB_T
 
-        return None
+        return self.__get_sized_array(log_probs, length, "log_probs")
 
-    @property
-    def energies(self) -> np.ndarray | None:
+    def get_energies(self, length: int = -1) -> np.ndarray | None:
         """
         Energies of the samples.
 
@@ -223,16 +245,17 @@ class Dataset:
             Array with shape (batch,), or ``None`` if neither energies nor
             log-probabilities are available.
         """
+        energies = None
+
         if self._energies is not None:
-            return self._energies
+            energies = self._energies
 
         if self._log_probs is not None:
-            return -self._log_probs * self._kB_T
+            energies = -self._log_probs * self._kB_T
 
-        return None
+        return self.__get_sized_array(energies, length, "energies")
 
-    @property
-    def scores(self) -> np.ndarray | None:
+    def get_scores(self, length: int = -1) -> np.ndarray | None:
         """
         Score function values ∇_x log p(x).
 
@@ -246,16 +269,17 @@ class Dataset:
             Array with shape (batch, d), or ``None`` if neither scores nor
             forces are available.
         """
+        scores = None
+
         if self._scores is not None:
-            return self._scores
+            scores = self._scores
 
         if self._forces is not None:
-            return self._forces / self._kB_T
+            scores = self._forces / self._kB_T
 
-        return None
+        return self.__get_sized_array(scores, length, "scores")
 
-    @property
-    def forces(self) -> np.ndarray | None:
+    def get_forces(self, length: int = -1) -> np.ndarray | None:
         """
         Forces acting on the samples.
 
@@ -273,10 +297,12 @@ class Dataset:
             Array with shape (batch, d), or ``None`` if neither forces nor
             scores are available.
         """
+        forces = None
+
         if self._forces is not None:
-            return self._forces
+            forces = self._forces
 
         if self._scores is not None:
-            return self._scores * self._kB_T
+            forces = self._scores * self._kB_T
 
-        return None
+        return self.__get_sized_array(forces, length, "forces")

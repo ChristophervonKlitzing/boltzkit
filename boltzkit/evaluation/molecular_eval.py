@@ -441,28 +441,34 @@ if __name__ == "__main__":
     )
 
     bm = MolecularBoltzmann(
-        "datasets/chrklitz99/test_system", length_unit="nanometer", n_workers=2
+        "datasets/chrklitz99/test_system", length_unit="angstrom", n_workers=2
     )
 
     topology = bm.get_mdtraj_topology()
     tica_model = bm.get_tica_model()
     z_matrix = bm.get_z_matrix()
 
-    val_dataset = bm.load_dataset(T=300.0, type="val")
-    print(val_dataset.shape)
+    val_dataset = bm.load_dataset(
+        T=300.0, type="val", length=8_000, include_energies=True
+    )
+    val_samples = val_dataset.get_samples()
+    print("loaded dataset size:", val_samples.shape)
 
-    true_samples = val_dataset[:10_000]
+    true_samples = val_samples
     true_samples = true_samples.reshape(true_samples.shape[0], -1)
 
-    pred_samples = val_dataset[:1_000]
+    pred_samples = val_samples[:1_000]
     pred_samples = pred_samples.reshape(pred_samples.shape[0], -1)
     pred_samples = pred_samples  # + 0.01 * np.random.randn(*pred_samples.shape)
+
+    true_samples_log_prob = val_dataset.get_log_probs()
+    pred_samples_log_probs = bm.get_log_prob(pred_samples)
 
     eval_data = EvalData(
         samples_true=true_samples,
         samples_pred=pred_samples,
-        true_samples_target_log_prob=bm.get_log_prob(true_samples),
-        pred_samples_target_log_prob=bm.get_log_prob(pred_samples),
+        true_samples_target_log_prob=true_samples_log_prob,
+        pred_samples_target_log_prob=pred_samples_log_probs,
     )
 
     mol_eval_pipeline = []

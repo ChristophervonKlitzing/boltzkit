@@ -9,6 +9,7 @@ from boltzkit.utils.molecular.conversion import vec3_list_to_numpy
 from boltzkit.targets.base import NumPyTarget
 
 from boltzkit.utils.cached_repo import CachedRepo
+from boltzkit.utils.dataset import Dataset
 from boltzkit.utils.molecular.energy_eval import (
     kB_in_eV_per_K,
     ParallelEnergyEval,
@@ -82,6 +83,7 @@ class MolecularBoltzmann(NumPyTarget):
             )
 
         self._repo = CachedRepo(path, **kwargs)
+
         self._init_openmm()
 
         self._temperature = self._repo.config.get("temperature", 300.0)
@@ -179,43 +181,40 @@ class MolecularBoltzmann(NumPyTarget):
         score = forces / (kB_in_eV_per_K * T)
         return score
 
-    def _numpy_log_prob_and_score(self, x):
+    def get_energy_and_forces(
+        self, x: np.ndarray, include_energy: bool = True, include_forces: bool = True
+    ):
         x_nm = x * self._length_scale
-        energy, forces_nm = self.energy_eval.evaluate_batch(x_nm)
-        forces = forces_nm * self._length_scale
+        energy, forces_nm = self.energy_eval.evaluate_batch(
+            x_nm, include_energy=include_energy, include_forces=include_forces
+        )
+        if forces_nm is not None:
+            forces = forces_nm * self._length_scale
+        else:
+            forces = None
+        return energy, forces
+
+    def _numpy_log_prob_and_score(self, x):
+        energy, forces = self.get_energy_and_forces(
+            x, include_energy=True, include_forces=True
+        )
         log_probs = self._energy_to_log_prob(energy)
         scores = self._forces_to_score(forces)
         return log_probs, scores
 
     def _numpy_log_prob(self, x):
-        x_nm = x * self._length_scale
-        energy, _ = self.energy_eval.evaluate_batch(x_nm, include_forces=False)
+        energy, _ = self.get_energy_and_forces(
+            x, include_energy=True, include_forces=False
+        )
         log_probs = self._energy_to_log_prob(energy)
         return log_probs
 
     def _numpy_score(self, x):
-        x_nm = x * self._length_scale
-        _, forces_nm = self.energy_eval.evaluate_batch(x_nm, include_energy=False)
-        forces = forces_nm * self._length_scale
+        _, forces = self.get_energy_and_forces(
+            x, include_energy=False, include_forces=True
+        )
         scores = self._forces_to_score(forces)
         return scores
-
-    def get_energy_and_forces_numpy(self, x: np.ndarray):
-        x_nm = x * self._length_scale
-        energy, forces_nm = self.energy_eval.evaluate_batch(x_nm)
-        forces = forces_nm * self._length_scale
-        return energy, forces
-
-    def _numpy_energy(self, x):
-        x_nm = x * self._length_scale
-        energy, _ = self.energy_eval.evaluate_batch(x_nm, include_forces=False)
-        return energy
-
-    def _numpy_forces(self, x):
-        x_nm = x * self._length_scale
-        _, forces_nm = self.energy_eval.evaluate_batch(x_nm, include_energy=False)
-        forces = forces_nm * self._length_scale
-        return forces
 
     def get_z_matrix(self, allow_autogen=True) -> list[tuple[int, int, int, int]]:
         """
@@ -295,29 +294,6 @@ class MolecularBoltzmann(NumPyTarget):
         tica_local_path = self._repo.load_file(tica_remote_path)
         return TicaModelWithLengthScale.from_path(tica_local_path, self._length_scale)
 
-    def load_dataset(
-        self, T: float | str | int, type: Literal["train", "val", "test"]
-    ) -> np.ndarray | None:
-        datasets: dict[str, dict[str, str]] | None = self._repo.config.get(
-            "datasets", None
-        )
-        if datasets is None:
-            return None
-
-        if isinstance(T, int):
-            T = float(T)
-
-        temp_cfg = datasets.get(str(T), None)
-        if temp_cfg is None:
-            return None
-
-        dataset_remote_fname = temp_cfg.get(type, None)
-        if dataset_remote_fname is None:
-            return None
-
-        local_fname = self._repo.load_file(dataset_remote_fname)
-        return np.load(local_fname) / self._length_scale
-
     @property
     def spatial_dim(self) -> int:
         return self._spatial_dim
@@ -328,6 +304,255 @@ class MolecularBoltzmann(NumPyTarget):
 
     def can_sample(self):
         return False
+
+    def load_dataset(
+        self,
+        T: float | int,
+        type: Literal["train", "val", "test"],
+        length: int = -1,
+        *,
+        #
+        include_samples: bool = True,
+        include_energies: bool = False,
+        include_forces: bool = False,
+        #
+        cache_energies: bool = True,
+        cache_forces: bool = False,
+        #
+        allow_autogen: bool = True,
+    ) -> Dataset:
+        datasets: dict[str, dict[str, str]] | None = self._repo.config.get(
+            "datasets", None
+        )
+        if datasets is None:
+            raise RuntimeError("Missing datasets config")
+
+        if isinstance(T, int):
+            T = float(T)
+
+        temp_cfg = datasets.get(str(T), None)
+        if temp_cfg is None:
+            available_temps = list(datasets.keys())
+            raise RuntimeError(
+                f"Missing dataset: "
+                f"Searched for temperature {T}K, but only found {available_temps}."
+            )
+
+        dset_cfg: dict[str, str] | str | None = temp_cfg.get(type, None)
+        if dset_cfg is None:
+            available_keys = list(temp_cfg.keys())
+            raise RuntimeError(
+                f"Missing dataset type for temperature {T}K. "
+                f"Searched for type '{type}', but only found {available_keys}."
+            )
+
+        if isinstance(dset_cfg, str):
+            dset_cfg = {"samples": dset_cfg}
+
+        samples = self.__load_samples(dset_cfg, T, length)
+
+        cache_prefix = f"_cached_dataset_{T}K_{type}"
+        energies, forces = self.__load_compute_energies_and_forces(
+            samples,
+            dset_cfg=dset_cfg,
+            autogen=allow_autogen,
+            include_energies=include_energies,
+            include_forces=include_forces,
+            cache_prefix=cache_prefix,
+            cache_energies=cache_energies,
+            cache_forces=cache_forces,
+        )
+
+        if not include_samples:
+            samples = None
+
+        kB_T = kB_in_eV_per_K * T
+        return Dataset(kB_T, samples=samples, energies=energies, forces=forces)
+
+    def __load_samples(self, dset_cfg: dict[str, str], T: float, length: int):
+        samples_remote_fpath = dset_cfg.get("samples", None)
+        if samples_remote_fpath is None:
+            raise RuntimeError(
+                f"Missing 'samples' key for dataset of type '{type}' at temperature {T}K"
+            )
+        samples_local_fpath = self._repo.load_file(samples_remote_fpath)
+        samples_nm: np.ndarray = np.load(samples_local_fpath)
+
+        if length != -1:
+            assert samples_nm.shape[0] >= length
+            samples_nm = samples_nm[:length]
+
+        samples = samples_nm / self._length_scale
+        return samples
+
+    def __load_compute_energies_and_forces(
+        self,
+        samples: np.ndarray,
+        dset_cfg: dict[str, str],
+        autogen: bool,
+        #
+        include_energies: bool,
+        include_forces: bool,
+        #
+        cache_prefix: str,
+        cache_energies: bool,
+        cache_forces: bool,
+    ):
+        kv_store = self._repo.get_key_value_store()
+        energies_cache_key = cache_prefix + f"_energies"
+        forces_cache_key = cache_prefix + f"_forces"
+        local_cache_dir = self._repo.get_local_cache_directory()
+
+        # Get local energies path
+        remote_energies_path = dset_cfg.get("energies", None)
+        if remote_energies_path is not None:
+            energies_local_fpath = self._repo.load_file(remote_energies_path)
+        elif cache_energies and autogen:
+            rel = kv_store.get(energies_cache_key)
+            energies_local_fpath = local_cache_dir / rel if rel is not None else None
+        else:
+            energies_local_fpath = None
+
+        # Get local forces path
+        remote_forces_path = dset_cfg.get("forces", None)
+        if remote_forces_path is not None:
+            forces_local_fpath = self._repo.load_file(remote_forces_path)
+        elif cache_forces and autogen:
+            rel = kv_store.get(forces_cache_key)
+            forces_local_fpath = local_cache_dir / rel if rel is not None else None
+        else:
+            forces_local_fpath = None
+
+        energies = None
+        forces = None
+
+        # Load energies and forces from file if possible
+        if include_energies and energies_local_fpath is not None:
+            print(f"Use pre-computed energies from '{energies_local_fpath}'")
+            energies: np.ndarray = np.load(energies_local_fpath)
+            if energies.shape[0] > samples.shape[0]:
+                energies = energies[: samples.shape[0]]
+
+        if include_forces and forces_local_fpath is not None:
+            print(f"Use pre-computed forces from '{forces_local_fpath}'")
+            forces_nm: np.ndarray = np.load(forces_local_fpath)
+            if forces_nm.shape[0] > samples.shape[0]:
+                forces_nm = forces_nm[: samples.shape[0]]
+            forces = forces_nm * self._length_scale
+
+        # If necessary and autogen is True, compute energies/forces online
+        if autogen:
+            energies, forces = self._fill_missing_energies_and_forces(
+                samples,
+                energies,
+                forces,
+                include_energies=include_energies,
+                include_forces=include_forces,
+            )
+
+            # If caching is enabled, cache the computed energies/forces
+            if cache_energies and energies is not None:
+                relative_energies_fpath = f"{cache_prefix}_energies.npy"
+                kv_store.set(energies_cache_key, relative_energies_fpath)
+                energies_fpath = local_cache_dir / relative_energies_fpath
+                np.save(energies_fpath, energies)
+            if cache_forces and forces is not None:
+                forces_nm = forces / self._length_scale
+                relative_forces_fpath = f"{cache_prefix}_forces.npy"
+                kv_store.set(forces_cache_key, relative_forces_fpath)
+                forces_fpath = local_cache_dir / relative_forces_fpath
+                np.save(forces_fpath, forces_nm)
+
+        return energies, forces
+
+    def _fill_missing_energies_and_forces(
+        self,
+        samples: np.ndarray,
+        energies: np.ndarray | None,
+        forces: np.ndarray | None,
+        include_energies: bool,
+        include_forces: bool,
+    ):
+        n_samples = samples.shape[0]
+        n_energies = 0 if energies is None else energies.shape[0]
+        n_forces = 0 if forces is None else forces.shape[0]
+
+        require_energies = include_energies and n_energies < n_samples
+        require_forces = include_forces and n_forces < n_samples
+
+        # If there is a mismatch between n_energies and n_forces, first compute the
+        # remaining forces or energies to catch up.
+        if require_energies and require_forces:
+            if n_energies < n_forces:
+                energy_gap, _ = self.get_energy_and_forces(
+                    samples[n_energies:n_forces],
+                    include_energy=True,
+                    include_forces=False,
+                )
+                if energies is None:
+                    energies = energy_gap
+                else:
+                    energies = np.concatenate([energies, energy_gap], 0)
+                n_energies += energy_gap.shape[0]
+            elif n_forces < n_energies:
+                _, forces_gap = self.get_energy_and_forces(
+                    samples[n_forces:n_energies],
+                    include_energy=False,
+                    include_forces=True,
+                )
+                if forces is None:
+                    forces = forces_gap
+                else:
+                    forces = np.concatenate([forces, forces_gap], 0)
+                n_forces += forces_gap.shape[0]
+
+        # Re-compute flags with updated energy/force count
+        require_energies = include_energies and n_energies < n_samples
+        require_forces = include_forces and n_forces < n_samples
+
+        if require_energies and require_forces:
+            assert n_energies == n_forces
+            start_idx = n_energies  # or = n_forces
+        elif require_energies:
+            start_idx = n_energies
+        elif require_forces:
+            start_idx = n_forces
+        else:  # both False
+            start_idx = n_samples
+
+        if start_idx < n_samples:  # compute remaining energies and/or forces
+            n_missing_energies = 0 if not require_energies else n_samples - n_energies
+            n_missing_forces = 0 if not require_forces else n_samples - n_forces
+            print(
+                f"Compute {n_missing_energies} energies and {n_missing_forces} forces"
+            )
+
+            missing_energies, missing_forces = self.get_energy_and_forces(
+                samples[start_idx:n_samples],
+                include_energy=require_energies,
+                include_forces=require_forces,
+            )
+
+            if missing_energies is not None:
+                if energies is None:
+                    energies = missing_energies
+                else:
+                    energies = np.concatenate([energies, missing_energies], 0)
+
+            if missing_forces is not None:
+                if forces is None:
+                    forces = missing_forces
+                else:
+                    forces = np.concatenate([forces, missing_forces], 0)
+
+        return energies, forces
+
+
+"""
+TODO: 
+- Implement get_energy_numpy, get_forces_numpy, and get_energy_and_forces_numpy()
+- potentially allow framework-agnostic decorator to ignore self parameter to be directly applicable
+"""
 
 
 def print_z_matrix(z_matrix: list[tuple[int, int, int, int]]):

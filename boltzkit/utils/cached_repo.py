@@ -4,6 +4,7 @@ from typing import Any
 from huggingface_hub import HfFileSystem, hf_hub_download, snapshot_download
 import yaml
 from pathlib import PurePosixPath
+from boltzkit.utils.key_value_store import FileKV
 
 
 def is_local_path(path: str) -> bool:
@@ -53,6 +54,9 @@ class CachedRepo:
         # Load initial file
         self._info_path = self.load_file("info.yaml")
 
+        local_dir = self.get_local_cache_directory()
+        self._key_value_store = FileKV(local_dir / "cached_config.yaml")
+
         with open(self._info_path) as f:
             self._config: dict[str, Any] = yaml.safe_load(f)
 
@@ -60,7 +64,7 @@ class CachedRepo:
             snapshot_download(
                 repo_id=self._path.replace("datasets/", ""),
                 repo_type="dataset",
-                local_dir=self._local_cache_dir / self._repo_name,
+                local_dir=self.get_local_cache_directory(),
                 ignore_patterns=[".gitattributes"],
             )
 
@@ -92,7 +96,7 @@ class CachedRepo:
         """
 
         remote_path = f"{self._path}/{relative_filepath}"
-        local_path = self._local_cache_dir / self._repo_name / relative_filepath
+        local_path = self.get_local_cache_directory() / relative_filepath
 
         # Create subdirectories if needed
         local_path.parent.mkdir(parents=True, exist_ok=True)
@@ -118,10 +122,16 @@ class CachedRepo:
             repo_id=repo_id,
             filename=relative_filepath,
             repo_type=repo_type,
-            local_dir=self._local_cache_dir / self._repo_name,
+            local_dir=self.get_local_cache_directory(),
         )
 
         return Path(local_path)
+
+    def get_local_cache_directory(self):
+        return self._local_cache_dir / self._repo_name
+
+    def get_key_value_store(self):
+        return self._key_value_store
 
 
 if __name__ == "__main__":
