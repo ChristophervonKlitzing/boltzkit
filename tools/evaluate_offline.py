@@ -113,7 +113,7 @@ def parse_args() -> argparse.Namespace:
 
 def main():
     args = parse_args()
-
+    print(f"Evaluation offline with args={vars(args)}")
     if args.true_samples is not None:
         true_samples = load_from_file(
             args.true_samples, data_type="samples", n_samples=args.n_samples
@@ -132,7 +132,7 @@ def main():
 
     if args.pred_samples is not None:
         if str(args.pred_samples) == "_debug":
-            pred_samples = true_samples + 0.1 * np.random.randn(*true_samples.shape)
+            pred_samples = true_samples + 0.01 * np.random.randn(*true_samples.shape)
         else:
             pred_samples = load_from_file(
                 args.pred_samples, data_type="samples", n_samples=args.n_samples

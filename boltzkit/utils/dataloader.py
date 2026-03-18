@@ -13,7 +13,7 @@ def load_from_file(
     path: str | Path,
     data_type: Literal["log_probs", "samples"],
     n_samples: int | None = None,
-    dtype: type | np.dtype = np.float64,
+    dtype: type | np.dtype = np.float32,
 ) -> np.ndarray:
     """
     Load data from a file and validate/reshape it according to its type.
@@ -159,7 +159,9 @@ def load_from_file(
     if n_samples is not None:
         data = data[:n_samples]
 
-    data = np.array(data, dtype=dtype)
+    if data.dtype != dtype:
+        data = np.array(data, dtype=dtype)
+
     return data
 
 
