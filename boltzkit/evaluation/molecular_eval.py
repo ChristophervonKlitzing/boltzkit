@@ -441,16 +441,14 @@ if __name__ == "__main__":
     )
 
     bm = MolecularBoltzmann(
-        "datasets/chrklitz99/test_system", length_unit="angstrom", n_workers=2
+        "datasets/chrklitz99/alanine_dipeptide", length_unit="angstrom", n_workers=2
     )
 
     topology = bm.get_mdtraj_topology()
     tica_model = bm.get_tica_model()
     z_matrix = bm.get_z_matrix()
 
-    val_dataset = bm.load_dataset(
-        T=300.0, type="val", length=8_000, include_energies=True
-    )
+    val_dataset = bm.load_dataset(T=300.0, type="val", length=-1, include_energies=True)
     val_samples = val_dataset.get_samples()
     print("loaded dataset size:", val_samples.shape)
 
@@ -483,8 +481,8 @@ if __name__ == "__main__":
     )
     mol_eval_pipeline.append(torsion_eval)
 
-    # tica_eval = TicaEval(topology, tica_model, vis_mode=plot_as_log_density)
-    # mol_eval_pipeline.append(tica_eval)
+    tica_eval = TicaEval(topology, tica_model, vis_mode=plot_as_log_density)
+    mol_eval_pipeline.append(tica_eval)
 
     # energy_hist_eval = EnergyHistEval()
     # mol_eval_pipeline.append(energy_hist_eval)

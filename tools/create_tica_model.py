@@ -1,4 +1,5 @@
 import argparse
+import gc
 import os
 import pickle
 
@@ -142,7 +143,7 @@ def tica_model_creator_tool(args):
     ps_per_frame = traj_reduced_sim_time_ns / xs.shape[0] * 1000
 
     if args.timescale_plot == True:
-        lag_times = [20, 50, 100, 200, 500, 1000, 2000, 5000]  # in ps
+        lag_times = [20, 30, 40, 50, 60, 70, 80, 90, 100, 200, 500, 1000, 5000]  # in ps
     else:
         lag_times = [args.lag_time_ps]
 
@@ -151,6 +152,7 @@ def tica_model_creator_tool(args):
     eigenvalues_tica_0 = []
     eigenvalues_tica_1 = []
     for lag_time_ps in lag_times:
+        gc.collect()
         lag_n_frames = lag_time_ps / ps_per_frame
         lag_n_frames = int(round(lag_n_frames, 0))
 

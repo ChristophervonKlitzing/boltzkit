@@ -54,10 +54,17 @@ def parse_args():
         help="Random seed (default: 0)",
     )
 
+    parser.add_argument(
+        "--trajectory_index",
+        type=int,
+        default=0,
+        help="Selects the trajectory by index (default 0 is used)",
+    )
+
     return parser.parse_args()
 
 
-def load_dataset(file_path: Path, dataset_key: str | None = None):
+def load_dataset(file_path: Path, trajectory_idx: int, dataset_key: str | None = None):
     suffix = file_path.suffix.lower()
 
     if suffix == ".h5":
@@ -78,7 +85,7 @@ def load_dataset(file_path: Path, dataset_key: str | None = None):
     else:
         raise ValueError("Unsupported file type. Use .h5 or .npy")
 
-    return data
+    return data[:, trajectory_idx, :, :]
 
 
 def main():
@@ -88,7 +95,8 @@ def main():
     output_dir = args.output or Path(input_path).resolve().parent
     os.makedirs(output_dir, exist_ok=True)
 
-    data = load_dataset(input_path, args.dataset)
+    data = load_dataset(input_path, args.trajectory_index, args.dataset)
+    print(f"Loaded input trajectory if length {data.shape[0]}")
 
     n = data.shape[0]
     splits = args.splits
@@ -109,7 +117,9 @@ def main():
         subset_idx = indices[start:end]
         subset = data[subset_idx]
 
-        out_path = output_dir / f"{base_name}_split{i}_n{size}.npy"
+        out_path = (
+            output_dir / f"{base_name}_traj{args.trajectory_index}_split{i}_n{size}.npy"
+        )
         np.save(out_path, subset)
 
         print(f"Saved split {i} (n={size}) to: {out_path}")

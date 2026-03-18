@@ -90,24 +90,6 @@ def load_dataset(file_path: Path, trajectory_idx: int, dataset_key: str | None =
     return data[:, trajectory_idx, :, :]
 
 
-def index_large(x: np.ndarray, index: np.ndarray):
-    """
-    Computes x[index] in batches.
-    """
-    out = np.empty((index.shape[0],) + x.shape[1:], dtype=x.dtype)
-
-    STEP_SIZE = 512
-    for i in tqdm.tqdm(range(0, out.shape[0], STEP_SIZE)):
-        batch_size = min(STEP_SIZE, out.shape[0] - i)
-        batch_index = index[i : i + batch_size]
-        batch_data = x[batch_index]
-        out[i : i + batch_size] = batch_data
-        del batch_index, batch_data
-        if i % (10 * STEP_SIZE) == 0:
-            gc.collect()
-    return out
-
-
 def main():
     args = parse_args()
 
@@ -119,31 +101,14 @@ def main():
     data = load_dataset(input_path, args.trajectory_index, args.dataset)
     print(f"Loaded input trajectory of length {data.shape[0]}")
 
-    # Set seed and create permutation
-    rng = np.random.default_rng(args.seed)
-    n = data.shape[0]
-
-    perm = rng.permutation(n)
-    inv_perm = np.argsort(perm)
-
-    # Apply inverse permutation
-    permuted_data = index_large(data, inv_perm)
-
     # Save outputs
     base_name = os.path.splitext(os.path.basename(input_path))[0]
 
-    perm_path = os.path.join(
-        output_dir, f"{base_name}_traj{args.trajectory_index}_perm.npy"
-    )
-    data_path = os.path.join(
-        output_dir, f"{base_name}_traj{args.trajectory_index}_permuted.npy"
-    )
+    traj_path = os.path.join(output_dir, f"{base_name}_traj{args.trajectory_index}.npy")
 
-    np.save(perm_path, perm)
-    np.save(data_path, permuted_data)
+    np.save(traj_path, data)
 
-    print(f"Saved permutation to: {perm_path}")
-    print(f"Saved permuted data to: {data_path}")
+    print(f"Saved trajectory to: {traj_path}")
 
 
 if __name__ == "__main__":

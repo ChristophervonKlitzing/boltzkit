@@ -281,7 +281,7 @@ class MolecularBoltzmann(NumPyTarget):
         tica_key = "tica"
         tica_remote_path = self._repo.config.get(tica_key, None)
         if tica_remote_path is None:
-            tica_file_list = self._repo.find_file(r"^tica.pkl$")
+            tica_file_list = self._repo.find_file(r"^tica.*\.pkl$")
             if len(tica_file_list) != 1:
                 raise ValueError(
                     f"Expected exactly one tica file in the repository, "
