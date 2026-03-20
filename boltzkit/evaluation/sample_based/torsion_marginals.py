@@ -100,6 +100,50 @@ def get_torsion_marginal_hists(
     return phi_psi_hists, phi_hists, psi_hists
 
 
+def get_free_energy_difference(
+    phis: np.ndarray,
+    phi_range: tuple[float, float] = (0, 2),
+):
+    """
+    Estimate the free energy difference between two regions of backbone torsion phi angles.
+
+    The function partitions the input values into an "inner" region defined
+    by `phi_range` and an "outer" region (everything outside that interval),
+    then computes a free energy difference based on the relative populations
+    of these regions:
+
+        ΔF = - (log(N_inner) - log(N_outer)) = log(N_outer / N_inner)
+
+    Parameters
+    ----------
+    phis : np.ndarray
+        Array of sampled values. Can be of shape (batch,) or
+        (batch, n_torsions). All values are flattened implicitly when counting.
+    phi_range : tuple of float, optional
+        Tuple (phi_min, phi_max) defining the inclusive bounds of the
+        "inner" region. Default is (0, 2).
+
+    Returns
+    -------
+    float
+        Estimated free energy difference ΔF in $kB T$ (i.e., no multiplication with kB*T)
+        between the outer and inner regions. Returns np.nan if either region contains zero samples.
+    """
+    phi_min, phi_max = phi_range
+    inner_mask = (phis >= phi_min) & (phis <= phi_max)
+    outer_mask = (phis < phi_min) | (phis > phi_max)
+
+    inner_count = np.sum(inner_mask)
+    outer_count = np.sum(outer_mask)
+
+    if inner_count > 0 and outer_count > 0:
+        free_energy_delta = -(np.log(inner_count) - np.log(outer_count))
+    else:
+        free_energy_delta = np.nan
+
+    return free_energy_delta
+
+
 def get_torus_wasserstein_2(
     phis_psis_true: tuple[np.ndarray, np.ndarray],
     phis_psis_pred: tuple[np.ndarray, np.ndarray],

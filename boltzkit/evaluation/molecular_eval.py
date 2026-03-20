@@ -11,6 +11,7 @@ from boltzkit.evaluation.sample_based.internal_coordinate_eval import (
     get_dihedral_angle_hist,
 )
 from boltzkit.evaluation.sample_based.torsion_marginals import (
+    get_free_energy_difference,
     get_torsion_angles,
     get_torsion_marginal_hists,
     visualize_torsion_marginals_dual,
@@ -88,6 +89,20 @@ class TorsionMarginalEval(Evaluation):
         torsion_marginals_true = get_torsion_marginal_hists(*angles_true)
         torsion_marginals_pred = get_torsion_marginal_hists(*angles_pred)
 
+        # Compute free energy difference on phi angles
+        # (neg log weight ratio between high and low energy region)
+        phis_true = angles_true[0]
+        phis_pred = angles_pred[0]
+        free_energy_difference_true = get_free_energy_difference(phis_true)
+        free_energy_difference_pred = get_free_energy_difference(phis_pred)
+        metrics["torsion_marginals/free_energy_difference_true"] = (
+            free_energy_difference_true
+        )
+        metrics["torsion_marginals/free_energy_difference_pred"] = (
+            free_energy_difference_pred
+        )
+
+        # Compute histogram metrics
         if len(self.histogram_metrics) > 0:
             # Only get 2D histogram metrics fow now
             marginals_true_2d = torsion_marginals_true[0]
@@ -439,6 +454,8 @@ if __name__ == "__main__":
     from boltzkit.evaluation.sample_based.histogram_comparison import (
         get_histogram_jensen_shannon_divergence,
     )
+
+    from boltzkit.utils.histogram import plot_as_free_energy
 
     bm = MolecularBoltzmann(
         "datasets/chrklitz99/alanine_dipeptide", length_unit="angstrom", n_workers=2
