@@ -139,12 +139,72 @@ def get_euclidean_wasserstein_1_2(
 
 if __name__ == "__main__":
     from boltzkit.targets.boltzmann import MolecularBoltzmann
+    from boltzkit.evaluation.sample_based.torsion_marginals import get_torsion_angles
 
-    bm = MolecularBoltzmann("datasets/chrklitz99/test_system")
+    rng = np.random.default_rng(0)
+
+    bm = MolecularBoltzmann("datasets/chrklitz99/alanine_dipeptide")
     topology = bm.get_mdtraj_topology()
+    dataset = bm.load_dataset(300, "val", length=20_000)
+    val_samples = dataset.get_samples()
 
-    gt_samples = np.random.randn(1_000, 66)
-    model_samples = np.random.randn(1_000, 66)
+    angles = get_torsion_angles(val_samples, topology)
+    angles = np.concatenate(angles, axis=1)
+    print(angles.shape)
 
-    W1, W2 = get_euclidean_wasserstein_1_2(model_samples, gt_samples)
-    print(W1, W2)
+    n_samples = 5_000
+
+    distances_true = []
+    for _ in range(10):
+        perm = rng.permutation(val_samples.shape[0])
+        mask_a = perm[:n_samples]
+        mask_b = perm[n_samples : 2 * n_samples]
+
+        print(mask_a.shape, mask_b.shape)
+        # Select random subset of torsion angles
+        angles_a = angles[mask_a]
+        angles_b = angles[mask_b]
+
+        W2 = get_torus_wasserstein(angles_a, angles_b)
+        print(W2)
+        distances_true.append(W2)
+
+    angles_pred = get_torsion_angles(
+        val_samples + rng.normal(size=val_samples.shape) * 0.01, topology
+    )
+    angles_pred = np.concatenate(angles_pred, axis=1)
+    print(angles_pred.shape)
+
+    n_samples = 5_000
+
+    distances_pred = []
+    for _ in range(10):
+        perm = rng.permutation(val_samples.shape[0])
+        mask_a = perm[:n_samples]
+        mask_b = perm[n_samples : 2 * n_samples]
+
+        print(mask_a.shape, mask_b.shape)
+        # Select random subset of torsion angles
+        angles_a = angles_pred[mask_a]
+        angles_b = angles[mask_b]
+
+        W2 = get_torus_wasserstein(angles_a, angles_b)
+        print(W2)
+        distances_pred.append(W2)
+
+    print(f"W2_internal: {np.mean(distances_true)}±{np.std(distances_true)}")
+    print(f"W2_cross: {np.mean(distances_pred)}±{np.std(distances_pred)}")
+
+    import numpy as np
+    from scipy import stats
+
+    A = np.array(distances_true)
+    B = np.array(distances_pred)
+
+    t_stat, p_value = stats.ttest_rel(A, B)
+
+    alpha = 0.05
+    if p_value < alpha:
+        print("Significant difference (p =", p_value, ")")
+    else:
+        print("Not significant (p =", p_value, ")")

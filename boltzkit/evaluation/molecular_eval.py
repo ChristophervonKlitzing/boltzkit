@@ -458,23 +458,25 @@ if __name__ == "__main__":
     from boltzkit.utils.histogram import plot_as_free_energy
 
     bm = MolecularBoltzmann(
-        "datasets/chrklitz99/alanine_dipeptide", length_unit="angstrom", n_workers=2
+        "datasets/chrklitz99/alanine_dipeptide", length_unit="nanometer", n_workers=2
     )
 
     topology = bm.get_mdtraj_topology()
     tica_model = bm.get_tica_model()
     z_matrix = bm.get_z_matrix()
 
-    val_dataset = bm.load_dataset(T=300.0, type="val", length=-1, include_energies=True)
+    val_dataset = bm.load_dataset(
+        T=300.0, type="val", length=100_000, include_energies=True
+    )
     val_samples = val_dataset.get_samples()
     print("loaded dataset size:", val_samples.shape)
 
     true_samples = val_samples
     true_samples = true_samples.reshape(true_samples.shape[0], -1)
 
-    pred_samples = val_samples[:1_000]
+    pred_samples = val_samples
     pred_samples = pred_samples.reshape(pred_samples.shape[0], -1)
-    pred_samples = pred_samples  # + 0.01 * np.random.randn(*pred_samples.shape)
+    pred_samples = pred_samples + 0.01 * np.random.randn(*pred_samples.shape)
 
     true_samples_log_prob = val_dataset.get_log_probs()
     pred_samples_log_probs = bm.get_log_prob(pred_samples)
