@@ -80,12 +80,20 @@ def load_dataset(file_path: Path, trajectory_idx: int, dataset_key: str | None =
             data = f[dataset_key][:]
 
     elif suffix == ".npy":
-        data = np.load(file_path)
+        data = np.load(file_path, mmap_mode="r")
 
     else:
         raise ValueError("Unsupported file type. Use .h5 or .npy")
 
-    return data[:, trajectory_idx, :, :]
+    if data.ndim not in [3, 4]:
+        raise ValueError(
+            "Input data must have shape (length, #trajectories, #atoms, 3) or (length, #atoms, 3)"
+        )
+
+    if data.ndim == 4:
+        data = data[:, trajectory_idx, :, :]
+
+    return data
 
 
 def main():

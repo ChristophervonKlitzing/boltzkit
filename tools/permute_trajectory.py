@@ -80,14 +80,17 @@ def load_dataset(file_path: Path, trajectory_idx: int, dataset_key: str | None =
 
             data = f[dataset_key][:]
     elif suffix == ".npy":
-        data = np.load(file_path)
+        data = np.load(file_path, mmap_mode="r")
 
-    if not len(data.shape) == 4:
+    if data.ndim not in [3, 4]:
         raise ValueError(
-            "Input data must have shape (length, #trajectories, #atoms, 3)"
+            "Input data must have shape (length, #trajectories, #atoms, 3) or (length, #atoms, 3)"
         )
 
-    return data[:, trajectory_idx, :, :]
+    if data.ndim == 4:
+        data = data[:, trajectory_idx, :, :]
+
+    return data
 
 
 def index_large(x: np.ndarray, index: np.ndarray):
@@ -96,8 +99,8 @@ def index_large(x: np.ndarray, index: np.ndarray):
     """
     out = np.empty((index.shape[0],) + x.shape[1:], dtype=x.dtype)
 
-    STEP_SIZE = 512
-    for i in tqdm.tqdm(range(0, out.shape[0], STEP_SIZE)):
+    STEP_SIZE = 256
+    for i in tqdm.tqdm(range(0, out.shape[0], STEP_SIZE), desc="Permute data"):
         batch_size = min(STEP_SIZE, out.shape[0] - i)
         batch_index = index[i : i + batch_size]
         batch_data = x[batch_index]
