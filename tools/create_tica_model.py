@@ -8,6 +8,7 @@ import mdtraj as md
 import numpy as np
 
 from boltzkit.evaluation.sample_based.tica import visualize_tica, get_tica_hist
+from boltzkit.utils.histogram import get_histogram_2d, visualize_histogram_2d
 from boltzkit.utils.molecular.tica import create_deeptime_tica_model, get_tica_features
 
 from boltzkit.targets.boltzmann import MolecularBoltzmann
@@ -113,8 +114,60 @@ def parse_args():
         ),
     )
 
+    parser.add_argument(
+        "--colormap",
+        action="store_true",
+        help=(
+            "Show colored tica vectors together with the the 2D torsion marginal "
+            "vectors (Ramachandran) using region dependent coloring"
+        ),
+    )
+
     args = parser.parse_args()
     return args
+
+
+def map_tica_projections_to_color(tics: np.ndarray):
+    from matplotlib.colors import hsv_to_rgb
+
+    # maps 2D coordinates to colors
+    x = tics[:, 0]
+    y = tics[:, 1]
+    x_min = x.min()
+    x_max = x.max()
+    y_min = y.min()
+    y_max = y.max()
+
+    x_norm = (x - x_min) / (x_max - x_min)
+    y_norm = (y - y_min) / (y_max - y_min)
+
+    # Hue: changes with x
+    # Saturation: full (1.0)
+    # Value: changes with y
+    h = x_norm  # hue cycles through 0-1
+    s = np.ones(x.shape[0])  # full saturation
+    v = 0.5 + 0.5 * y_norm  # brightness from 0.5 to 1.0
+
+    hsv = np.stack([h, s, v], axis=1)  # shape (N, 3)
+    rgb = hsv_to_rgb(hsv)
+    return rgb
+
+
+def plot_tica_and_ram_colored(
+    color_arr: np.ndarray, tics: np.ndarray, rams: np.ndarray
+):
+    _, axes = plt.subplots(nrows=2, ncols=2, figsize=(12, 12))
+
+    axes[0, 0].scatter(tics[:, 0], tics[:, 1], c=color_arr, s=20, edgecolors="none")
+    axes[0, 1].scatter(rams[:, 0], rams[:, 1], c=color_arr, s=20, edgecolors="none")
+
+    tica_hist = get_histogram_2d(tics)
+    visualize_histogram_2d(tica_hist, ax=axes[1, 0], cbar=False)
+
+    ram_hist = get_histogram_2d(rams)
+    visualize_histogram_2d(ram_hist, ax=axes[1, 1], cbar=False)
+
+    plt.show()
 
 
 def tica_model_creator_tool(args):
@@ -191,6 +244,22 @@ def tica_model_creator_tool(args):
 
         tica_hist = get_tica_hist(tics)
         tica_pdf = visualize_tica(tica_hist)
+
+        if args.colormap:
+            from boltzkit.evaluation.sample_based.torsion_marginals import (
+                get_phi_psi_vectors,
+            )
+
+            color_arr = map_tica_projections_to_color(tics)
+            phis, psis = get_phi_psi_vectors(xs, topology)
+
+            # Only use backbone angle pair 0
+            phis = phis[:, 0]
+            psis = psis[:, 0]
+            rams = np.stack([phis, psis], 1)
+            print(rams.shape)
+
+            plot_tica_and_ram_colored(color_arr, tics, rams)
 
         vis_path = os.path.join(
             traj_dir,

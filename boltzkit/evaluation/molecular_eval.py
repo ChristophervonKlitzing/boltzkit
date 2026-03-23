@@ -476,7 +476,7 @@ if __name__ == "__main__":
 
     pred_samples = val_samples
     pred_samples = pred_samples.reshape(pred_samples.shape[0], -1)
-    pred_samples = pred_samples + 0.01 * np.random.randn(*pred_samples.shape)
+    pred_samples = pred_samples + 0.001 * np.random.randn(*pred_samples.shape)
 
     true_samples_log_prob = val_dataset.get_log_probs()
     pred_samples_log_probs = bm.get_log_prob(pred_samples)
@@ -503,8 +503,8 @@ if __name__ == "__main__":
     tica_eval = TicaEval(topology, tica_model, vis_mode=plot_as_log_density)
     mol_eval_pipeline.append(tica_eval)
 
-    # energy_hist_eval = EnergyHistEval()
-    # mol_eval_pipeline.append(energy_hist_eval)
+    energy_hist_eval = EnergyHistEval()
+    mol_eval_pipeline.append(energy_hist_eval)
 
     # bond_length_eval = BondLengthEval(topology, z_matrix)
     # mol_eval_pipeline.append(bond_length_eval)
