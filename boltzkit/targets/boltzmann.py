@@ -376,7 +376,7 @@ class MolecularBoltzmann(NumPyTarget):
                 f"Missing 'samples' key for dataset of type '{type}' at temperature {T}K"
             )
         samples_local_fpath = self._repo.load_file(samples_remote_fpath)
-        samples_nm: np.ndarray = np.load(samples_local_fpath)
+        samples_nm: np.ndarray = np.load(samples_local_fpath, mmap_mode="r")
 
         if length != -1:
             assert samples_nm.shape[0] >= length

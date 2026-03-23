@@ -379,8 +379,23 @@ def visualize_histogram_1d(
         x, y = (y, x)
         xlabel, ylabel = (ylabel, xlabel)
 
-    # Plot the data
-    ax.plot(x, y, label=label, linestyle=linestyle)
+    n_nans = np.isnan(y).astype(np.float32).sum()
+    if n_nans == y.shape[0] - 1:  # all but one nan
+        dirac_like = True
+    else:
+        dirac_like = False
+
+    if dirac_like:
+        dirac_idx = (~np.isnan(y)).astype(np.float32).argmax()
+        offset = hist.get_bin_area() / 2
+        x_min = x[dirac_idx] - offset
+        x_max = x[dirac_idx] + offset
+        y_dirac_vals = [0, y[dirac_idx], 0]
+        x_dirac_vals = [x_min, x[dirac_idx], x_max]
+        ax.plot(x_dirac_vals, y_dirac_vals, label=label, linestyle=linestyle)
+    else:
+        # Plot the data
+        ax.plot(x, y, label=label, linestyle=linestyle)
 
     # Add optional titles and labels
     if title:

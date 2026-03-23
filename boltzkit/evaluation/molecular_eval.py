@@ -24,6 +24,7 @@ from boltzkit.utils.histogram import (
     Histogram1D,
     Histogram2D,
     VisualizationMode,
+    plot_as_density,
     plot_as_log_density,
     visualize_histograms,
 )
@@ -159,11 +160,11 @@ class BondLengthEval(Evaluation):
         self,
         topology: md.Topology,
         z_matrix: list[tuple[int, int, int, int]],
-        vis_mode: VisualizationMode = plot_as_log_density,
+        vis_mode: VisualizationMode = plot_as_density,
         include_pdfs: bool = True,
         include_true_histograms: bool = False,
         include_pred_histograms: bool = False,
-        max_histogram_bond_length: float | None = 2.0,
+        max_histogram_bond_length: float | None = None,
     ):
         super().__init__()
 
@@ -191,6 +192,7 @@ class BondLengthEval(Evaluation):
             topology=self._topology,
             z_matrix=self._z_matrix,
         )
+        print(true.shape, pred.shape, true.mean(), pred.mean(), true.std(), pred.std())
         # assert true.shape == pred.shape
         n_marginals = true.shape[1]
 
@@ -450,6 +452,7 @@ if __name__ == "__main__":
     from boltzkit.targets.boltzmann import MolecularBoltzmann
     from boltzkit.utils.pdf import plot_pdf
     from boltzkit.evaluation.eval import EvalData, EnergyHistEval, run_eval
+    from boltzkit.evaluation.molecular_eval import BondLengthEval
     from boltzkit.evaluation.eval import get_pdfs, make_wandb_compatible
     from boltzkit.evaluation.sample_based.histogram_comparison import (
         get_histogram_jensen_shannon_divergence,
@@ -458,7 +461,7 @@ if __name__ == "__main__":
     from boltzkit.utils.histogram import plot_as_free_energy
 
     bm = MolecularBoltzmann(
-        "datasets/chrklitz99/alanine_dipeptide", length_unit="nanometer", n_workers=2
+        "datasets/chrklitz99/alanine_hexapeptide", length_unit="nanometer", n_workers=2
     )
 
     topology = bm.get_mdtraj_topology()
@@ -466,7 +469,7 @@ if __name__ == "__main__":
     z_matrix = bm.get_z_matrix()
 
     val_dataset = bm.load_dataset(
-        T=300.0, type="val", length=100_000, include_energies=True
+        T=300.0, type="val", length=10_000, include_energies=True
     )
     val_samples = val_dataset.get_samples()
     print("loaded dataset size:", val_samples.shape)
@@ -474,9 +477,13 @@ if __name__ == "__main__":
     true_samples = val_samples
     true_samples = true_samples.reshape(true_samples.shape[0], -1)
 
-    pred_samples = val_samples
+    test_dataset = bm.load_dataset(
+        T=300.0, type="test", length=10_000, include_energies=True
+    )
+    pred_samples = test_dataset.get_samples()
     pred_samples = pred_samples.reshape(pred_samples.shape[0], -1)
-    pred_samples = pred_samples + 0.001 * np.random.randn(*pred_samples.shape)
+    # pred_samples: np.ndarray = np.load("300K_val.npy", mmap_mode="r")[:10_000] / 10.0
+    # pred_samples = pred_samples.reshape(pred_samples.shape[0], -1)
 
     true_samples_log_prob = val_dataset.get_log_probs()
     pred_samples_log_probs = bm.get_log_prob(pred_samples)
