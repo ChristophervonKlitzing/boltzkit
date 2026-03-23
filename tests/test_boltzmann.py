@@ -6,7 +6,7 @@ from boltzkit.targets.boltzmann import MolecularBoltzmann
 
 class TestBoltzmann(unittest.TestCase):
     def setUp(self):
-        path = "datasets/chrklitz99/test_system"
+        path = "datasets/chrklitz99/alanine_dipeptide"
         bm = MolecularBoltzmann(path)
         self.bm = bm
 

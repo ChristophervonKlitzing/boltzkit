@@ -148,7 +148,7 @@ Boltzmann targets use huggingface and can be instantiated easily via:
 ```python 
 from boltzkit.targets.boltzmann import MolecularBoltzmann
 
-target = MolecularBoltzmann("datasets/chrklitz99/test_system")
+target = MolecularBoltzmann("datasets/chrklitz99/alanine_dipeptide")
 ```
 
 Some common operations on this target include:
@@ -183,11 +183,9 @@ Alternatively, a positive real number can be passed to specify the coordinate sc
 - `"angstrom"` corresponds to `length_unit = 0.1`
 
 ### Available Boltzmann targets
-- datasets/chrklitz99/test_system
-- TODO: missing alanine  dipeptide (test_system is basically that)
-- TODO: datasets/chrklitz99/alanine_tetrapeptide
-- TODO: missing alanine hexapeptide
-- TODO: ELIL tetrapeptide
+- datasets/chrklitz99/alanine_dipeptide 
+- datasets/chrklitz99/alanine_tetrapeptide
+- datasets/chrklitz99/alanine_hexapeptide
 
 # Testing
 Before running tests, extra packages must be installed with:

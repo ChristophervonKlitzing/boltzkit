@@ -351,7 +351,7 @@ if __name__ == "__main__":
         visualize_histogram_2d,
     )
 
-    bm = MolecularBoltzmann("datasets/chrklitz99/test_system")
+    bm = MolecularBoltzmann("datasets/chrklitz99/alanine_dipeptide")
 
     topology = bm.get_mdtraj_topology()
 

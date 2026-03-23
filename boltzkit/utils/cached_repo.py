@@ -135,7 +135,7 @@ class CachedRepo:
 
 
 if __name__ == "__main__":
-    repo_path = "datasets/chrklitz99/test_system"
+    repo_path = "datasets/chrklitz99/alanine_dipeptide"
     sys_info = CachedRepo(repo_path, lazy_download=True)
 
     print("Remote files:")

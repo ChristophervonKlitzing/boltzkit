@@ -586,7 +586,7 @@ def print_z_matrix(z_matrix: list[tuple[int, int, int, int]]):
 
 if __name__ == "__main__":
     target = MolecularBoltzmann(
-        "datasets/chrklitz99/test_system", length_unit="angstrom"
+        "datasets/chrklitz99/alanine_dipeptide", length_unit="angstrom"
     )
     # log_probs = target.get_log_prob(np.random.randn(5, 22, 3))
     # print(log_probs)

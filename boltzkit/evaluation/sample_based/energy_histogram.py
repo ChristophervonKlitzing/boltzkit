@@ -132,7 +132,7 @@ def visualize_energy_hist_dual(
 if __name__ == "__main__":
     from boltzkit.targets.boltzmann import MolecularBoltzmann
 
-    bm = MolecularBoltzmann("datasets/chrklitz99/test_system")
+    bm = MolecularBoltzmann("datasets/chrklitz99/alanine_dipeptide")
 
     gt_samples = bm.load_dataset(T=300.0, type="val")[:50_000]
 

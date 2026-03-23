@@ -127,7 +127,7 @@ def get_tica_wasserstein_1_2(
 if __name__ == "__main__":
     from boltzkit.targets.boltzmann import MolecularBoltzmann
 
-    bm = MolecularBoltzmann("datasets/chrklitz99/test_system")
+    bm = MolecularBoltzmann("datasets/chrklitz99/alanine_dipeptide")
 
     topology = bm.get_mdtraj_topology()
     tica_model = bm.get_tica_model()

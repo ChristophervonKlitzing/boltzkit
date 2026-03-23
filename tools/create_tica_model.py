@@ -48,7 +48,7 @@ def parse_args():
             "Name of the molecular system used to construct the topology via "
             "MolecularBoltzmann. The name must correspond to a system supported by "
             "boltzkit.\n"
-            "Example: --system_name datasets/chrklitz99/test_system"
+            "Example: --system_name datasets/chrklitz99/alanine_dipeptide"
         ),
     )
     parser.add_argument(

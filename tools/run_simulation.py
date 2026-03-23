@@ -37,7 +37,7 @@ def parse_args():
         "--system",
         type=str,
         required=True,
-        help="The name of the system to simulate, e.g., datasets/chrklitz99/test_system",
+        help="The name of the system to simulate, e.g., datasets/chrklitz99/alanine_dipeptide",
     )
     parser.add_argument(
         "--temps",
