@@ -42,6 +42,13 @@ def parse_args():
     )
 
     parser.add_argument(
+        "--skipN",
+        type=int,
+        default=0,
+        help="Skip the first N samples in the trajectory and don't save them.",
+    )
+
+    parser.add_argument(
         "--output",
         type=Path,
         default=None,
@@ -101,13 +108,17 @@ def main():
     data = load_dataset(input_path, args.trajectory_index, args.dataset)
     print(f"Loaded input trajectory of length {data.shape[0]}")
 
+    print(f"Skip the first {args.skipN} samples...")
+    data = data[args.skipN :]
+    print(f"The remaining trajectory has length {data.shape[0]}")
+
     # Save outputs
     base_name = os.path.splitext(os.path.basename(input_path))[0]
 
     traj_path = os.path.join(output_dir, f"{base_name}_traj{args.trajectory_index}.npy")
 
+    print(f"Saving trajectory...")
     np.save(traj_path, data)
-
     print(f"Saved trajectory to: {traj_path}")
 
 
