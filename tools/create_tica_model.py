@@ -84,13 +84,13 @@ def parse_args():
     )
 
     parser.add_argument(
-        "--skip_N",
+        "--skipN",
         type=int,
         default=0,
         help=(
             "Number of initial frames to discard before analysis. "
             "This is typically used to remove equilibration or burn-in periods.\n"
-            "Example: --skip_N 1000"
+            "Example: --skipN 1000"
         ),
     )
     parser.add_argument(
@@ -177,8 +177,8 @@ def tica_model_creator_tool(args):
     total_traj_len = xs.shape[0]
     print("Original dataset shape:", total_traj_len)
 
-    xs = xs[args.skip_N :, ...]
-    print(f"Dataset shape after skipping {args.skip_N} frames:", xs.shape)
+    xs = xs[args.skipN :, ...]
+    print(f"Dataset shape after skipping {args.skipN} frames:", xs.shape)
 
     # Adjust the total simulation time to match the reduced trajectory length
     traj_reduced_sim_time_ns = (
@@ -253,13 +253,13 @@ def tica_model_creator_tool(args):
             color_arr = map_tica_projections_to_color(tics)
             phis, psis = get_phi_psi_vectors(xs, topology)
 
-            # Only use backbone angle pair 0
-            phis = phis[:, 0]
-            psis = psis[:, 0]
-            rams = np.stack([phis, psis], 1)
-            print(rams.shape)
+            for i in range(phis.shape[1]):
+                # Only use backbone angle pair 0
+                phis_i = phis[:, i]
+                psis_i = psis[:, i]
+                rams = np.stack([phis_i, psis_i], 1)
 
-            plot_tica_and_ram_colored(color_arr, tics, rams)
+                plot_tica_and_ram_colored(color_arr, tics, rams)
 
         vis_path = os.path.join(
             traj_dir,
