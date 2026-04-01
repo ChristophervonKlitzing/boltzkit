@@ -8,7 +8,7 @@ from boltzkit.utils.molecular.conversion import vec3_list_to_numpy
 
 from boltzkit.targets.base import NumPyTarget
 
-from boltzkit.utils.cached_repo import CachedRepo
+from boltzkit.utils.cached_repo import create_cached_repo
 from boltzkit.utils.dataset import Dataset
 from boltzkit.utils.molecular.energy_eval import (
     kB_in_eV_per_K,
@@ -82,7 +82,7 @@ class MolecularBoltzmann(NumPyTarget):
                 f"Parallel energy & force evaluation ({n_workers=}) makes no sense when not using {openmm_platform=}"
             )
 
-        self._repo = CachedRepo(path, **kwargs)
+        self._repo = create_cached_repo(path, **kwargs)
 
         self._init_openmm()
 
@@ -398,10 +398,10 @@ class MolecularBoltzmann(NumPyTarget):
         cache_energies: bool,
         cache_forces: bool,
     ):
-        kv_store = self._repo.get_key_value_store()
+        kv_store = self._repo.get_cached_key_value_store()
         energies_cache_key = cache_prefix + f"_energies"
         forces_cache_key = cache_prefix + f"_forces"
-        local_cache_dir = self._repo.get_local_cache_directory()
+        local_cache_dir = self._repo.local_path
 
         # Get local energies path
         remote_energies_path = dset_cfg.get("energies", None)
