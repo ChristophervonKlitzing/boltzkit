@@ -2,7 +2,7 @@ import math
 from typing import Optional, Callable, TYPE_CHECKING
 import numpy as np
 from scipy.spatial.transform import Rotation as R
-from boltzkit.utils.framework import Array, create_framework_dispatch
+from boltzkit.utils.framework import Array, create_dispatch
 
 if TYPE_CHECKING:
     import torch
@@ -150,4 +150,4 @@ def create_symmetry_augmentation(
 
         return samples_.reshape((batch, -1))
 
-    return create_framework_dispatch(impl_torch=augment_torch, impl_np=augment_np)
+    return create_dispatch(impl_torch=augment_torch, impl_np=augment_np)

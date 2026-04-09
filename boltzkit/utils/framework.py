@@ -16,6 +16,8 @@ if TYPE_CHECKING:
 
     Array = Union[np.ndarray, "torch.Tensor", "jax.Array"]
 
+GenericArrayType = TypeVar("T", np.ndarray, "torch.Tensor", "jax.Array")
+
 
 def is_torch_tensor(x) -> bool:
     try:
@@ -443,30 +445,57 @@ def make_agnostic(
         return decorator
 
 
-def create_framework_dispatch(
+def create_dispatch(
     impl_np: Callable | None = None,
     impl_torch: Callable | None = None,
     impl_jax: Callable | None = None,
+    vmap_jax: bool = False,
+    use_jit: bool = False,
 ):
-    available_implementations: dict[FrameworkName, Callable] = []
+    available_implementations: dict[FrameworkName, Callable] = {}
     if impl_np is not None:
         available_implementations["numpy"] = impl_np
     if impl_torch is not None:
         available_implementations["pytorch"] = impl_torch
     if impl_jax is not None:
+        try:
+            import jax
+        except:
+            raise ValueError(
+                "Function was given a jax implementation `impl_jax` but jax could not be imported"
+            )
+
+        if vmap_jax:
+            impl_jax = jax.vmap(impl_jax)
+        if use_jit:
+            impl_jax = jax.jit(impl_jax)
+
         available_implementations["jax"] = impl_jax
 
     def fn(*args, **kwargs):
         framework = detect_framework(args[0])
         if framework not in available_implementations:
             raise ValueError(
-                f"The function was called with an array-type from framework '{framework}' ({type(args[0]).__name__}) but is not specified"
+                f"The function was called with an array-type from framework '{framework}' ({type(args[0]).__name__}) but no {framework} implementation was provided"
             )
         fn = available_implementations[framework]
         return fn(*args, **kwargs)
 
     return fn
 
+
+def make_agnostic_by_lazy_dispatch(
+    *,
+    create_value_fn_np: Callable[[np.ndarray], np.ndarray],
+    create_value_fn_jax: Callable[["jax.Array"], "jax.Array"],
+    create_value_fn_torch: Callable[["torch.Tensor"], "torch.Tensor"],
+) -> FrameworkAgnosticFunction: ...
+
+
+# TODO: Add FrameworkAgnosticFunction.from_jax, .from_torch, and .from_numpy
+# TODO: Create make_agnostic_by_lazy_dispatch function which takes the factory methods for the implementations
+# The returned FrameworkAgnosticFunction lazily dispatches to the correct implementation because
+# the input arguments (functions) to FrameworkAgnosticFunction dispatch and lazily create the implementations.
 
 if __name__ == "__main__":
     import torch
