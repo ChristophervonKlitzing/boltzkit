@@ -215,7 +215,7 @@ For the systems already included in this repository, the corresponding trajector
 
 Equilibrium-distribution trajectories are generated using the `tools/run_simulation.py` script. For each system, we generate **two independent trajectories**, each containing **10⁷ samples**.
 
-- **Trajectory 1** is used directly as the **test dataset** and for **training the TICA model**.
+- **Trajectory 1** is used directly as the **test dataset** and for **training the TICA model**. The **test dataset** is a random permutation of this trajectory.
 - **Trajectory 2** is **subsampled without replacement** to construct the **training** and **validation** datasets, each containing **10⁶ samples**.
 
 
