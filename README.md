@@ -238,6 +238,27 @@ python tools/run_simulation.py --system datasets/chrklitz99/alanine_hexapeptide 
 ```
 
 
+
+### Workflow to create TICA model and datasets
+1. **Convert to NumPy:** Convert the raw `.h5` output to NumPy format. Use the `--skipN` flag for larger systems to discard the initial equilibration phase (e.g., `--skipN 1000000` for Alanine Hexapeptide to remove the first 200ns of REMD).
+    ```bash
+    python tools/extract_trajectory_as_numpy.py path/to/traj.h5 --skipN <N>
+    ```
+2. **Create TICA Model:** Run the model creation script on the trajectory designated for the test dataset. This identifies slow degrees of freedom and offers options for plotting lag-times or Ramachandran correspondences.
+    ```bash
+    python tools/create_tica_model.py --traj_path path/to/traj.npy --traj_total_sim_time_ns <sim_time> --system_name <system_path> --lag_time_ps 100
+    ```
+3. **Generate Test Dataset:** Permute the first trajectory. If multiple parallel trajectories were generated, concatenate them before running this command:
+    ```bash
+    python tools/permute_trajectory.py path/to/traj_1.npy
+    ```
+4. **Generate Train/Val Datasets:** Create random subsets without replacement from the second trajectory:
+    ```bash
+    python tools/split_trajectory.py path/to/traj_2.npy
+    ```
+5. Upload everything to huggingface (see alanine dipeptide for reference) and don't forget to update the info.yaml file
+
+
 # TODOs
 - Chirality filtering
 - Test data augmentation
