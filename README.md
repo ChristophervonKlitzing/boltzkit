@@ -215,7 +215,7 @@ For the systems already included in this repository, the corresponding trajector
 
 Equilibrium-distribution trajectories are generated using the `tools/run_simulation.py` script. For each system, we generate **two independent trajectories**, each containing **10⁷ samples**.
 
-- **Trajectory 1** is used directly as the **test dataset** and for **training the TICA model**.
+- **Trajectory 1** is used directly as the **test dataset** and for **training the TICA model**. The **test dataset** is a random permutation of this trajectory.
 - **Trajectory 2** is **subsampled without replacement** to construct the **training** and **validation** datasets, each containing **10⁶ samples**.
 
 
@@ -236,6 +236,27 @@ The four trajectories each of size 5x10⁶ for the system **Alanine Hexapeptide*
 ```bash
 python tools/run_simulation.py --system datasets/chrklitz99/alanine_hexapeptide --temps 300.0:500.0:6 --time_step 1.0 --rec_interval 0.2 --pre_eq_time 200.0 --simu_time 1200.0 --integrator LangevinMiddle --write_checkpoint_every_ns 100 --save_traj_of_replicas 0
 ```
+
+
+
+### Workflow to create TICA model and datasets
+1. **Convert to NumPy:** Convert the raw `.h5` output to NumPy format. Use the `--skipN` flag for larger systems to discard the initial equilibration phase (e.g., `--skipN 1000000` for Alanine Hexapeptide to remove the first 200ns of REMD).
+    ```bash
+    python tools/extract_trajectory_as_numpy.py path/to/traj.h5 --skipN <N>
+    ```
+2. **Create TICA Model:** Run the model creation script on the trajectory designated for the test dataset. This identifies slow degrees of freedom and offers options for plotting lag-times or Ramachandran correspondences.
+    ```bash
+    python tools/create_tica_model.py --traj_path path/to/traj.npy --traj_total_sim_time_ns <sim_time> --system_name <system_path> --lag_time_ps 100
+    ```
+3. **Generate Test Dataset:** Permute the first trajectory. If multiple parallel trajectories were generated, concatenate them before running this command:
+    ```bash
+    python tools/permute_trajectory.py path/to/traj_1.npy
+    ```
+4. **Generate Train/Val Datasets:** Create random subsets without replacement from the second trajectory:
+    ```bash
+    python tools/split_trajectory.py path/to/traj_2.npy
+    ```
+5. Upload everything to huggingface (see alanine dipeptide for reference) and don't forget to update the info.yaml file
 
 
 # TODOs

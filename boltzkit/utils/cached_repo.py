@@ -144,17 +144,8 @@ class HuggingfaceRepo(CachedRepo):
 
     @classmethod
     def match_uri(cls, uri):
-        if not uri.startswith("datasets/"):
-            return False
-
-        fs = HfFileSystem()
-
-        try:
-            # Try listing the root of the repo
-            fs.ls(uri)
-            return True
-        except Exception:
-            return False
+        pattern = r"^datasets\/[a-zA-Z0-9._-]+(\/.*)?$"
+        return bool(re.match(pattern, uri))
 
     @classmethod
     def get_name_from_uri(cls, uri):

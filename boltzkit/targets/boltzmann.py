@@ -1,3 +1,4 @@
+import os
 from typing import Literal
 import warnings
 
@@ -21,9 +22,44 @@ from openmm import app
 import openmm as mm
 from openmm import unit
 
+from boltzkit.utils.molecular.pdbpatch import fixed_atom_names
 from boltzkit.utils.molecular.tica import TicaModelWithLengthScale
 from boltzkit.utils.molecular.z_matrix_factory import ZMatrixFactory
 import mdtraj as md
+
+_CHARMM_KEY = "charmm_files"
+_FORCEFIELDS_KEY = "forcefields"
+_PDB_KEY = "pdb_file"
+_PSF_KEY = "psf_file"
+
+
+def _parse_system_args(system_args: dict):
+    system_args = system_args.copy()
+
+    # Parse implicitSolvent if present
+    implicit_solvent_key = "implicitSolvent"
+    if implicit_solvent_key in system_args:
+        solvent = system_args[implicit_solvent_key]
+        if solvent == "OBC1":
+            system_args[implicit_solvent_key] = app.OBC1
+        elif solvent == "OBC2":
+            system_args[implicit_solvent_key] = app.OBC2
+        else:
+            raise ValueError(
+                f"Unsupported value for key '{implicit_solvent_key}': Got '{solvent}' but expected either 'OBC1' or 'OBC2'"
+            )
+
+    # Parse hydrogenMass if present
+    hydrogen_mass_key = "hydrogenMass"
+    if hydrogen_mass_key in system_args:
+        factor = system_args[hydrogen_mass_key]
+        if not (isinstance(factor, float) and factor > 0):
+            raise ValueError(
+                f"Unsupported value for key '{hydrogen_mass_key}': Got '{factor}' but expected it to be a positive float"
+            )
+        system_args[hydrogen_mass_key] = factor * unit.amu
+
+    return system_args
 
 
 class MolecularBoltzmann(NumPyTarget):
@@ -106,9 +142,12 @@ class MolecularBoltzmann(NumPyTarget):
         else:
             self._length_scale = float(length_unit)
 
-    def _init_openmm(self):
-        pdb_key = "pdb_file"
-        pdb_file = self._repo.config.get(pdb_key, None)
+    def _get_system_args(self) -> dict:
+        system_args = self._repo.config.get("system_args", {})
+        return _parse_system_args(system_args)
+
+    def _find_pdb_file_path(self) -> str:
+        pdb_file = self._repo.config.get(_PDB_KEY, None)
         if pdb_file is None:
             # automatic search for pdb file (there must exist exactly one for automatic search)
             pdb_file_list = self._repo.find_file(r".*\.pdb$")
@@ -117,25 +156,65 @@ class MolecularBoltzmann(NumPyTarget):
                     f"Expected exactly one .pdb file in the repository, "
                     f"but found {len(pdb_file_list)}. "
                     f"Please specify the main PDB file explicitly in the config "
-                    f"using '{pdb_key}'."
+                    f"using '{_PDB_KEY}'."
                 )
             pdb_file = pdb_file_list[0]
             print(
-                f"Key '{pdb_key}' not specified. Use automatically detected .pdb file '{pdb_file}'."
+                f"Key '{_PDB_KEY}' not specified. Use automatically detected .pdb file '{pdb_file}'."
             )
 
         pdb_file_path = self._repo.load_file(pdb_file)
-        forcefields = self._repo.config.get(
-            "forcefields", ["amber99sbildn.xml", "amber99_obc.xml"]
-        )
-        system_args = self._repo.config.get("system_args", {})
+        return pdb_file_path.absolute().as_posix()
 
-        # Create system
-        self._pdb = app.PDBFile(pdb_file_path.absolute().as_posix())
-        self._forcefield = app.ForceField(*forcefields)
-        self._system: mm.System = self._forcefield.createSystem(
-            self._pdb.topology, **system_args
+    def _init_openmm(self):
+        if _CHARMM_KEY in self._repo.config:
+            pdb, system = self._init_openmm_from_CHARMM_params()
+        elif _FORCEFIELDS_KEY in self._repo.config:
+            pdb, system = self._init_openmm_from_forcefields()
+        else:
+            raise ValueError(
+                f"Unsupported config format: Use either '{_CHARMM_KEY}' or '{_FORCEFIELDS_KEY}' to configure the system"
+            )
+
+        self._system = system
+        self._pdb = pdb
+
+    def _init_openmm_from_forcefields(self):
+        forcefields = self._repo.config.get(
+            _FORCEFIELDS_KEY, ["amber99sbildn.xml", "amber99_obc.xml"]
         )
+
+        pdb = app.PDBFile(self._find_pdb_file_path())
+        ff = app.ForceField(*forcefields)
+        system_args = self._get_system_args()
+        system: mm.System = ff.createSystem(
+            pdb.topology, nonbondedMethod=app.NoCutoff, **system_args
+        )
+        return pdb, system
+
+    def _init_openmm_from_CHARMM_params(self):
+        with fixed_atom_names(TYR=["HT1", "HT2", "HT3"]):
+            # Contains the topology
+            psf_file = self._repo.load_file(self._repo.config[_PSF_KEY]).as_posix()
+            psf = app.CharmmPsfFile(psf_file)
+
+            # Contains the structure (e.g. positions)
+            pdb = app.PDBFile(self._find_pdb_file_path())
+
+        system_args = self._get_system_args()
+
+        params_files = self._repo.config.get(_CHARMM_KEY, [])
+        params_paths = [
+            self._repo.load_file(pfile).as_posix() for pfile in params_files
+        ]
+        params = app.CharmmParameterSet(*params_paths)
+
+        system: mm.System = psf.createSystem(
+            params,
+            nonbondedMethod=app.NoCutoff,
+            **system_args,
+        )
+        return pdb, system
 
     def get_openmm_topology(self):
         return self._pdb.topology
@@ -586,12 +665,12 @@ def print_z_matrix(z_matrix: list[tuple[int, int, int, int]]):
 
 if __name__ == "__main__":
     target = MolecularBoltzmann(
-        "datasets/chrklitz99/alanine_dipeptide", length_unit="angstrom"
+        "datasets/chrklitz99/chignolin",
+        length_unit="nanometer",
+        n_workers=None,
     )
-    # log_probs = target.get_log_prob(np.random.randn(5, 22, 3))
-    # print(log_probs)
 
     pos_min_energy = target.get_position_min_energy()
-    # print(pos_min_energy)
+    print(pos_min_energy)
 
-    print(target.load_dataset(300, "val")[0])
+    print(target.get_log_prob(np.expand_dims(pos_min_energy, 0)))
