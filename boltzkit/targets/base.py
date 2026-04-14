@@ -1,34 +1,20 @@
 from abc import ABC, abstractmethod
 import numpy as np
-from boltzkit.utils.framework import make_agnostic, FrameworkAgnosticFunction
+from boltzkit.targets._np import NumpyEval
+from boltzkit.utils.framework import (
+    make_agnostic,
+    FrameworkAgnosticFunction,
+    detect_framework,
+)
 from typing import TYPE_CHECKING, Callable
 
-from boltzkit.utils.framework import create_dispatch
 
 if TYPE_CHECKING:
     from boltzkit.utils.framework import GenericArrayType
+    from boltzkit.targets._torch import TorchEval
+    from boltzkit.targets._jax import JaxEval
     import jax
     import torch
-
-
-# TODO: Also add:
-"""
-can_sample and sample (should use an rng seeded in the constructor)
-logZ -> None | float
-
-!!! Not sure about whether the following should even be part of the class:
-
-__init__ should take arguments to load the datasets: subset of dict {"validation": ..., "test": ..., "train": ...}
-get/load_raw_dataset(split="validation") -> None | Dataset # or "test" or "train"
-Dataset is either only holding samples or also evals (only if already available in the dataset!).
-
-get_evaluation_data(n_samples: int, split="validation", fallback="sample", include_log_prob: bool = True, include_score: bool = True) -> Data
-split: "validation" or "test"
-fallback: "error" (default), "sample", "train", "valdiation", "test", "sample_warn" 
-Data object should provide sample function and other utility and be easily convertible into torch dataloader etc,
-but it should also provide functionality to sample like from a torch dataloader.
-get_evaluation_data should fail if the dataset is not loaded and sample is not an option.
-"""
 
 
 class BaseTarget(ABC):
@@ -85,7 +71,7 @@ class BaseTarget(ABC):
     def can_sample(self) -> bool:
         raise NotImplementedError
 
-    def sample(self, n_samples: int) -> np.ndarray:
+    def sample(self, n_samples: int, seed: int | None = None) -> np.ndarray:
         raise NotImplementedError
 
     def get_logZ(self) -> float | None:
@@ -145,7 +131,7 @@ class NumPyTarget(FrameworkAgnosticTarget):
 
 class JaxTarget(FrameworkAgnosticTarget):
     def __init__(
-        self, dim, jax_log_prob_fn_single: Callable[["jax.Array"], "jax.Array"]
+        self, dim: int, jax_log_prob_fn_single: Callable[["jax.Array"], "jax.Array"]
     ):
         super().__init__(dim)
         self._agnostic_impl = make_agnostic(
@@ -157,7 +143,7 @@ class JaxTarget(FrameworkAgnosticTarget):
 
 
 class PyTorchTarget(FrameworkAgnosticTarget):
-    def __init__(self, dim):
+    def __init__(self, dim: int):
         super().__init__(dim)
         self._agnostic_impl = make_agnostic(
             implementation="pytorch", value_fn=self._pytorch_log_prob
@@ -174,46 +160,77 @@ class PyTorchTarget(FrameworkAgnosticTarget):
         return self._agnostic_impl
 
 
-class DispatchedTarget(FrameworkAgnosticTarget):
-    def __init__(
-        self,
-        dim,
-        jax_log_prob_fn_single: Callable[["jax.Array"], "jax.Array"] | None = None,
-    ):
-        """
-        vmap_jax: Whether the jax_log_prob implementation is batched or not.
-        If vmap_jax is True, the implementation should not be batched as it will be batched automatically
-        """
+class DispatchedTarget(BaseTarget):
+    def __init__(self, dim):
         super().__init__(dim)
 
-        # TODO: Create FrameworkAgnosticFunction object here by calling `make_agnostic_by_lazy_dispatch`
-        # TODO: Overwrite _get_agnostic_impl function to do the rest
-        # TODO: Define factory methods for np, jax, and torch implementation
+        self.__np_eval_cache: NumpyEval | None = None
+        self.__torch_eval_cache = None
+        self.__jax_eval_cache = None
 
-        self._dispatched_log_prob_fn = create_dispatch(
-            impl_np=self._numpy_log_prob,
-            impl_jax=jax_log_prob_fn_single,
-            impl_torch=self._torch_log_prob,
-            vmap_jax=True,
-            use_jit=True,
-        )
+    @property
+    def __np_eval(self):
+        if self.__np_eval_cache is None:
+            self.__np_eval_cache = self._create_numpy_eval()
+        return self.__np_eval_cache
 
-    @abstractmethod
-    def _numpy_log_prob(self, x: np.ndarray) -> np.ndarray:
-        raise NotImplementedError
+    @property
+    def __jax_eval(self):
+        if self.__jax_eval_cache is None:
+            self.__jax_eval_cache = self._create_jax_eval()
+        return self.__jax_eval_cache
 
-    @abstractmethod
-    def _create_torch_log_prob_fn(self) -> Callable[[torch.Tensor], torch.Tensor]:
-        raise NotImplementedError
+    @property
+    def __torch_eval(self):
+        if self.__torch_eval_cache is None:
+            self.__torch_eval_cache = self._create_torch_eval()
+        return self.__torch_eval_cache
 
-    @abstractmethod
-    def _create_jax_log_prob_single_fn(self) -> Callable[[torch.Tensor], torch.Tensor]:
-        raise NotImplementedError
+    def get_log_prob_and_score(self, x):
+        framework = detect_framework(x)
+        if framework == "numpy":
+            return self.__np_eval.get_log_prob_and_score(x)
+        elif framework == "pytorch":
+            self.__torch_eval.parameters()[0]
+            return self.__torch_eval.get_log_prob_and_score(x)
+        elif framework == "jax":
+            return self.__jax_eval.get_log_prob_and_score(x)
+        else:
+            raise ValueError(
+                f"Framework '{framework}' currently not supported by this class"
+            )
 
-    # deprecated
-    @abstractmethod
-    def _torch_log_prob(self, x: "torch.Tensor") -> "torch.Tensor":
-        raise NotImplementedError
+    def get_score(self, x):
+        framework = detect_framework(x)
+        if framework == "numpy":
+            return self.__np_eval.get_score(x)
+        elif framework == "pytorch":
+            return self.__torch_eval.get_score(x)
+        elif framework == "jax":
+            return self.__jax_eval.get_score(x)
+        else:
+            raise ValueError(
+                f"Framework '{framework}' currently not supported by this class"
+            )
 
     def get_log_prob(self, x: "GenericArrayType") -> "GenericArrayType":
-        return self._dispatched_log_prob_fn(x)
+        framework = detect_framework(x)
+        if framework == "numpy":
+            return self.__np_eval.get_log_prob(x)
+        elif framework == "pytorch":
+            return self.__torch_eval.get_log_prob(x)
+        elif framework == "jax":
+            return self.__jax_eval.get_log_prob(x)
+        else:
+            raise ValueError(
+                f"Framework '{framework}' currently not supported by this class"
+            )
+
+    @abstractmethod
+    def _create_numpy_eval(self) -> NumpyEval: ...
+
+    @abstractmethod
+    def _create_torch_eval(self) -> "TorchEval": ...
+
+    @abstractmethod
+    def _create_jax_eval(self) -> "JaxEval": ...

@@ -1,9 +1,9 @@
 import numpy as np
 import torch
-import torch.nn as nn
+from boltzkit.targets._torch import TorchEval
 
 
-class TorchGMM(nn.Module):
+class TorchMoG(TorchEval):
     """
     PyTorch implementation of a GMM from pre-defined means, scales and logits (unnormalized log component weights).
     """
@@ -64,11 +64,11 @@ class TorchGMM(nn.Module):
             if torch.cuda.is_available():
                 self.cuda()
         else:
-            self.cpu()
+            raise RuntimeError("Could not ")
 
         # Reset _dist object to re-create it on the new device
         self._dist = None
 
-    def log_prob(self, x: torch.Tensor):
+    def _get_log_prob(self, x):
         log_prob = self._get_dist().log_prob(x)
         return log_prob

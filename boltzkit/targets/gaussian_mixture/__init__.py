@@ -1,0 +1,1 @@
+from boltzkit.targets.gaussian_mixture.gaussian_mixture import DiagonalGaussianMixture

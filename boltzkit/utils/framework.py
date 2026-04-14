@@ -484,19 +484,6 @@ def create_dispatch(
     return fn
 
 
-def make_agnostic_by_lazy_dispatch(
-    *,
-    create_value_fn_np: Callable[[np.ndarray], np.ndarray],
-    create_value_fn_jax: Callable[["jax.Array"], "jax.Array"],
-    create_value_fn_torch: Callable[["torch.Tensor"], "torch.Tensor"],
-) -> FrameworkAgnosticFunction: ...
-
-
-# TODO: Add FrameworkAgnosticFunction.from_jax, .from_torch, and .from_numpy
-# TODO: Create make_agnostic_by_lazy_dispatch function which takes the factory methods for the implementations
-# The returned FrameworkAgnosticFunction lazily dispatches to the correct implementation because
-# the input arguments (functions) to FrameworkAgnosticFunction dispatch and lazily create the implementations.
-
 if __name__ == "__main__":
     import torch
     import jax
