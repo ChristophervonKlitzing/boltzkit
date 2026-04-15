@@ -18,30 +18,31 @@ This design ensures maximum flexibility and broad compatibility with any NumPy-b
 
 # Installation
 ## Required prior setup
-The boltzkit package requires python>=3.10 with OpenMM being pre-installed.
+The boltzkit package requires python>=3.10 with OpenMM being installed separately.
 
 ### Create conda environment
 To create a fresh python environment use
 ```bash
-conda create -n boltzkit python=3.10 pip
+conda create -n some_fancy_env_name python=3.10 pip
 ```
 
 
 ### Install OpenMM
-OpenMM can be installed via `pip` or `conda` and can depend on cpu or cuda. For this reason, openmm must be installed separately.
+OpenMM can be installed via either pip or conda, and it may use either CPU or GPU (CUDA) backends depending on your system. For this reason, OpenMM is typically installed separately.
 
-For example, openmm can be installed via pip for CPU via:
+#### CPU installation (pip)
 ```bash
 pip install openmm
 ```
 
-or for CUDA via conda wia:
+#### GPU installation (conda)
+For example, to install OpenMM with CUDA 12 support using conda:
 ```bash
-TODO
+conda install -c conda-forge openmm cuda-version=12
 ```
 
 ## Installing boltzkit
-The `boltzkit` package can either be installed as a normal pip package or for development on `boltzkit`.
+The `boltzkit` package can either be installed as a normal pip package or for development on itself.
 
 ### For regular use
 The latest version of `boltzkit` can directly be installed from GitHub via:
@@ -57,7 +58,7 @@ git clone git@github.com:ChristophervonKlitzing/boltzkit.git
 
 Inside the cloned package, all dependencies can be installed using the extra `-e` flag for an editable install and `[dev]` flag for the extra development dependencies:
 ```bash
-pip install -e .[dev]
+pip install -e .[dev] --extra-index-url https://download.pytorch.org/whl/cpu
 ```
 
 
