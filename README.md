@@ -1,5 +1,4 @@
-![Unit-Tests:main](https://github.com/ChristophervonKlitzing/boltzkit/actions/workflows/run-tests.yaml/badge.svg?branch=main)
-![Unit-Tests:dev](https://github.com/ChristophervonKlitzing/boltzkit/actions/workflows/run-tests.yaml/badge.svg?branch=dev)
+main: ![main](https://github.com/ChristophervonKlitzing/boltzkit/actions/workflows/run-tests.yaml/badge.svg?branch=main) dev: ![dev](https://github.com/ChristophervonKlitzing/boltzkit/actions/workflows/run-tests.yaml/badge.svg?branch=dev)
 
 # The boltzkit package
 `boltzkit` is a Python package for working with molecular Boltzmann and related densities.
