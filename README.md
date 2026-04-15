@@ -1,3 +1,5 @@
+![unit-tests](https://github.com/ChristophervonKlitzing/boltzkit/actions/workflows/run-tests.yaml/badge.svg?branch=main)
+
 # The boltzkit package
 `boltzkit` is a Python package for working with molecular Boltzmann and related densities.
 It provides tools for defining target systems, loading datasets, running evaluation pipelines, and performing tasks such as chirality filtering.
