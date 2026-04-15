@@ -399,6 +399,54 @@ class MolecularBoltzmann(NumPyTarget):
         #
         allow_autogen: bool = True,
     ) -> Dataset:
+        """
+        Load a dataset for a given temperature and dataset split.
+
+        This method retrieves samples and optionally associated
+        energies and forces. It supports loading
+        precomputed data, retrieving cached values, and automatically
+        generating missing quantities (energies or forces) on demand.
+
+        Parameters
+        ----------
+        T : float | int
+            Temperature (in Kelvin) identifying the dataset. Integers are cast to float.
+        type : Literal["train", "val", "test"]
+            Dataset split to load.
+        length : int, optional
+            Maximum number of samples to load. If -1, all available samples are used.
+        include_samples : bool, default=True
+            Whether to return samples.
+        include_energies : bool, default=False
+            Whether to include energy values for each sample. Fails if no energies are available and `allow_autogen` is False.
+        include_forces : bool, default=False
+            Whether to include force values for each sample. Fails if no forces are available and `allow_autogen` is False.
+        cache_energies : bool, default=True
+            Whether to use cached and/or cache computed energies locally when they are generated. Requires `allow_autogen` to be True.
+        cache_forces : bool, default=False
+            Whether to use cached and/or cache computed forces locally when they are generated. Requires `allow_autogen` to be True.
+        allow_autogen : bool, default=True
+            If True, missing energies or forces are computed on demand. Without caching being enabled,
+            energies and forces will be re-computed each time this function is called.
+
+        Returns
+        -------
+        Dataset
+
+        Raises
+        ------
+        RuntimeError
+            If dataset configuration is missing or if the requested temperature
+            or dataset split is not found.
+
+        Notes
+        -----
+        - If energies or forces are missing, they may be:
+          1. Loaded from remote files if available,
+          2. Retrieved from a local cache if enabled,
+          3. Computed on demand if `allow_autogen=True`.
+        - Forces are internally scaled by `self._length_scale` when loaded and cached in nanometers.
+        """
         datasets: dict[str, dict[str, str]] | None = self._repo.config.get(
             "datasets", None
         )
