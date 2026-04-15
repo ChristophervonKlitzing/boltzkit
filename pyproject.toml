@@ -1,3 +1,39 @@
 [build-system]
-requires = ["setuptools>=64", "wheel"]
+requires = ["setuptools>=64"]
 build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+
+[project]
+name = "boltzkit"
+version = "0.1.0"
+description = "Package to quickly setup and evaluate Boltzmann densities and setup evaluation pipelines."
+readme = "README.md"
+requires-python = ">=3.10"
+
+
+dependencies = [
+    "mdtraj",
+    "numpy<2",  # openmm constraint
+    "scipy",
+    "huggingface-hub",
+    "pyyaml",
+    "POT",
+    "deeptime",
+    "matplotlib",
+    "PyMuPDF",  # imported as fitz
+    "reform @ git+https://github.com/henrik-schopmans/reform",
+]
+
+[project.optional-dependencies]
+dev = [
+    "h5py",
+    "torch",
+    "jax<0.7.2",
+    "wandb",
+]

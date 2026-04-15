@@ -16,36 +16,49 @@ The `boltzkit` package is **framework-agnostic**! The package relies primarily o
 This design ensures maximum flexibility and broad compatibility with any NumPy-based or NumPy-compatible machine learning framework.
 
 
-# Setup
+# Installation
+## Required prior setup
+The boltzkit package requires python>=3.10 with OpenMM being pre-installed.
 
-## Installation
-### OpenMM
-OpenMM can be installed via `pip` or `conda` and can depend on cuda. For this reason, openmm must be installed separately.
+### Create conda environment
+To create a fresh python environment use
+```bash
+conda create -n boltzkit python=3.10 pip
+```
+
+
+### Install OpenMM
+OpenMM can be installed via `pip` or `conda` and can depend on cpu or cuda. For this reason, openmm must be installed separately.
 
 For example, openmm can be installed via pip for CPU via:
 ```bash
 pip install openmm
 ```
 
-### boltzkit
-After installing OpenMM, the latest version of `boltzkit` can directly be installed from GitHub via:
+or for CUDA via conda wia:
+```bash
+TODO
+```
+
+## Installing boltzkit
+The `boltzkit` package can either be installed as a normal pip package or for development on `boltzkit`.
+
+### For regular use
+The latest version of `boltzkit` can directly be installed from GitHub via:
 ```bash
 pip install git+https://github.com/ChristophervonKlitzing/boltzkit
 ```
 
-
-## Development setup
-An environment with all dependencies can be installed in the following way:
+### Development setup
+Clone the repository using
 ```bash
-conda env create -f environment.yaml
+git clone git@github.com:ChristophervonKlitzing/boltzkit.git
 ```
 
-To activate the environment:
+Inside the cloned package, all dependencies can be installed using the extra `-e` flag for an editable install and `[dev]` flag for the extra development dependencies:
 ```bash
-conda activate boltzkit
+pip install -e .[dev]
 ```
-
-
 
 
 
@@ -110,7 +123,7 @@ When `skip_on_missing_data` is set to `False`, a `ValueError` is raised if any r
 
 
 ## Log to Weights & Biases
-**Note**: Requires wandb to be installed!
+**Note**: Requires wandb to be installed (not a dependency of boltzkit)!
 ```python
 from boltzkit.evaluation import make_wandb_compatible
 import wandb 
@@ -153,7 +166,7 @@ target = MolecularBoltzmann("datasets/chrklitz99/alanine_dipeptide")
 
 Some common operations on this target include:
 ```python
-val_samples = target.load_dataset(T=300.0, type="val")
+val_dataset = target.load_dataset(T=300.0, type="val")
 topology = target.get_mdtraj_topology()
 tica_model = target.get_tica_model()
 
@@ -173,7 +186,7 @@ target = MolecularBoltzmann(
 )
 ```
 
-**Note:** When setting the length scale during target creation, the `target` API automatically adapts. All inputs and outputs (coordinates, forces, scores, etc.) will use the selected unit, making it easy to work in the selected unit.
+**Note:** When setting the length scale during target creation, the `target` API automatically adapts. All inputs and outputs (coordinates, forces, scores, etc.) of the public class API will use the selected unit, making it easy to work in the selected unit.
 
 For this reason, we strongly recommend running the [evaluation](#create-and-run-evaluation-pipeline) together with `MolecularBoltzmann` targets. Otherwise, it is the user's responsibility to ensure that a consistent length scale is used throughout the evaluation.
 
@@ -188,12 +201,9 @@ Alternatively, a positive real number can be passed to specify the coordinate sc
 - datasets/chrklitz99/alanine_hexapeptide
 
 # Testing
-Before running tests, extra packages must be installed with:
-```bash
-pip install -r requirements_test.txt
-```
+Ensure the dev requirements are installed (see [development setup](#development-setup)).
 ## Run unit tests
-To run all unittests, run:
+To run all unittests, inside the boltzkit repo run:
 ```bash
 python -m unittest
 ```
@@ -211,9 +221,9 @@ test files need to start with `test_` to be discoverable.
 # Molecular dynamics trajectories
 
 **Note:** This section only applies when generating new datasets is necessary.  
-For the systems already included in this repository, the corresponding trajectories have already been precomputed for 300K.
+For the systems already included in this repository, the corresponding trajectories have mostly already been generated for 300K. This chapter requires the `dev` requirements to be installed (see [development setup](#development-setup)).
 
-Equilibrium-distribution trajectories are generated using the `tools/run_simulation.py` script. For each system, we generate **two independent trajectories**, each containing **10⁷ samples**.
+Equilibrium-distribution trajectories can be generated using the `tools/run_simulation.py` script. For each system, we generate **two independent trajectories**, each containing **10⁷ samples**.
 
 - **Trajectory 1** is used directly as the **test dataset** and for **training the TICA model**. The **test dataset** is a random permutation of this trajectory.
 - **Trajectory 2** is **subsampled without replacement** to construct the **training** and **validation** datasets, each containing **10⁶ samples**.

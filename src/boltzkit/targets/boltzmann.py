@@ -17,7 +17,6 @@ from boltzkit.utils.molecular.energy_eval import (
     SequentialEnergyEval,
 )
 
-
 from openmm import app
 import openmm as mm
 from openmm import unit
