@@ -159,7 +159,15 @@ hists = get_histograms(metrics)
 save_histograms(hists, dir_path) # uses keys of dict as filenames
 ```
 
-# Create target systems
+# Target systems
+## Framework support
+Each target implements `get_log_prob`, `get_score`, and `get_log_prob_and_score`, which accept inputs as NumPy arrays, JAX arrays, or PyTorch tensors and return outputs in the corresponding framework format. The table below summarizes framework support for each target (supported: ✅ | not supported: ❌).
+| Target                        | NumPy | Jax | PyTorch |
+|------------------------------|:-----:|:---:|:-------:|
+| MolecularBoltzmann          |   ✅   |  ✅  |    ✅    |
+| DiagonalGaussianMixture     |   ✅   |  ✅  |    ✅    |
+| IsotropicGaussianMixture    |   ✅   |  ✅  |    ✅    |
+
 ## Boltzmann targets
 Boltzmann targets use huggingface and can be instantiated easily via:
 ```python 
