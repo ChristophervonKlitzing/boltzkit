@@ -187,6 +187,11 @@ target.get_log_prob_and_score(samples)
 target.get_score(samples)
 ```
 
+### Available Boltzmann targets
+- datasets/chrklitz99/alanine_dipeptide 
+- datasets/chrklitz99/alanine_tetrapeptide
+- datasets/chrklitz99/alanine_hexapeptide
+
 ### Change length scale (Ångström, Nanometer, ...)
 
 Atomic coordinates (e.g., samples, scores, or forces) can be scaled arbitrarily. Internally, `MolecularBoltzmann` represents all coordinates in **nanometers**. The length scale can be configured when creating a target:
@@ -207,10 +212,7 @@ Alternatively, a positive real number can be passed to specify the coordinate sc
 - `"nanometer"` corresponds to `length_unit = 1.0`
 - `"angstrom"` corresponds to `length_unit = 0.1`
 
-### Available Boltzmann targets
-- datasets/chrklitz99/alanine_dipeptide 
-- datasets/chrklitz99/alanine_tetrapeptide
-- datasets/chrklitz99/alanine_hexapeptide
+
 
 # Testing
 Ensure the dev requirements are installed (see [development setup](#development-setup)).
