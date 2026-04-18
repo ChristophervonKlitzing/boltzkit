@@ -385,10 +385,10 @@ class MolecularBoltzmann(NumPyTarget):
 
     def load_dataset(
         self,
-        T: float | int,
         type: Literal["train", "val", "test"],
         length: int = -1,
         *,
+        T: float | int | None = None,
         #
         include_samples: bool = True,
         include_energies: bool = False,
@@ -409,12 +409,12 @@ class MolecularBoltzmann(NumPyTarget):
 
         Parameters
         ----------
-        T : float | int
-            Temperature (in Kelvin) identifying the dataset. Integers are cast to float.
         type : Literal["train", "val", "test"]
             Dataset split to load.
         length : int, optional
             Maximum number of samples to load. If -1, all available samples are used.
+        T : float | int | None
+            Temperature (in Kelvin) identifying the dataset. Integers are cast to float. If None, the target's temperature is used.
         include_samples : bool, default=True
             Whether to return samples.
         include_energies : bool, default=False

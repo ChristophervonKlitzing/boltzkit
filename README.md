@@ -174,6 +174,7 @@ Boltzmann targets use huggingface and can be instantiated easily via:
 from boltzkit.targets.boltzmann import MolecularBoltzmann
 
 target = MolecularBoltzmann("datasets/chrklitz99/alanine_dipeptide")
+# local directory-path works too
 ```
 
 Some common operations on this target include:
@@ -237,7 +238,7 @@ test files need to start with `test_` to be discoverable.
 **Note:** This section only applies when generating new datasets is necessary.  
 For the systems already included in this repository, the corresponding trajectories have mostly already been generated for 300K. This chapter requires the `dev` requirements to be installed (see [development setup](#development-setup)).
 
-Equilibrium-distribution trajectories can be generated using the `tools/run_simulation.py` script. For each system, we generate **two independent trajectories**, each containing **10⁷ samples**.
+Equilibrium-distribution trajectories can be generated using the `tools/run_simulation.py` script. For each system, we generate **two independent trajectories**, each containing **10⁷ samples**. Alternatively, to increase parallelization, we generate four trajectories of 5 × 10⁶ samples each and concatenate them pairwise, yielding two buffers of **10⁷** samples each like before.
 
 - **Trajectory 1** is used directly as the **test dataset** and for **training the TICA model**. The **test dataset** is a random permutation of this trajectory.
 - **Trajectory 2** is **subsampled without replacement** to construct the **training** and **validation** datasets, each containing **10⁶ samples**.
