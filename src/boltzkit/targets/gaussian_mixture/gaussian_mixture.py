@@ -8,18 +8,171 @@ from boltzkit.utils.dataset import Dataset
 
 
 class DiagonalGaussianMixture(DispatchedTarget):
+    """
+    Gaussian Mixture Model (GMM) with diagonal covariance matrices.
+
+    Each component is a multivariate normal distribution with independent
+    dimensions, i.e., a diagonal covariance matrix. The covariance of each
+    component k is given by:
+
+        Σ_k = diag(σ_{k,1}^2, ..., σ_{k,D}^2)
+
+    where `diag_stds[k, d] = σ_{k,d}` are the standard deviations.
+
+    The mixture weights are parameterized by `logits`, which are internally
+    normalized to log-probabilities.
+
+    Parameters
+    ----------
+    means : np.ndarray, shape (K, D)
+        Mean vectors of the mixture components, where K is the number of
+        components and D is the dimensionality.
+    diag_stds : np.ndarray, shape (K, D)
+        Per-component, per-dimension standard deviations (not variances).
+        Must be strictly positive.
+    logits : np.ndarray, shape (K,)
+        Unnormalized log-weights of the mixture components. These are
+        normalized internally via log-softmax.
+
+    Raises
+    ------
+    ValueError
+        If input shapes are inconsistent or invalid.
+    """
+
     def __init__(
         self,
         means: np.ndarray,
-        scales: np.ndarray,
+        diag_stds: np.ndarray,
         logits: np.ndarray,
     ):
+        """
+        Initialize a diagonal-covariance Gaussian mixture model.
+
+        See class docstring for full parameter description.
+        """
+
+        # Basic dimensionality check first (prevents cryptic index errors)
+        if means.ndim != 2:
+            raise ValueError(
+                f"`means` must be a 2D array of shape (n_components, dim), "
+                f"but got array with shape {means.shape}."
+            )
+
         dim = means.shape[1]
         super().__init__(dim)
 
+        self._n_components = means.shape[0]
+
         self._means = means
-        self._scales = scales
-        self._logits = logits
+        self._scales = diag_stds
+        self._logits = logits - logsumexp(logits)  # normalize
+
+        # Shape consistency checks
+        if diag_stds.shape != means.shape:
+            raise ValueError(
+                f"`scales` must have the same shape as `means`. "
+                f"Expected shape {means.shape}, but got {diag_stds.shape}."
+            )
+
+        if logits.shape != (self._n_components,):
+            raise ValueError(
+                f"`logits` must be a 1D array with length equal to the number "
+                f"of components ({self._n_components}), but got shape {logits.shape}."
+            )
+
+    @classmethod
+    def create_isotropic(
+        cls,
+        means: np.ndarray,
+        std: float,
+        logits: np.ndarray,
+    ):
+        """
+        Construct a GMM with isotropic components.
+
+        Each component shares the same standard deviation across all
+        dimensions, i.e., σ_{k,d} = std for all k, d.
+
+        Parameters
+        ----------
+        means : np.ndarray, shape (K, D)
+            Mean vectors of the mixture components.
+        std : float
+            Shared standard deviation for all components and dimensions.
+            Must be positive.
+        logits : np.ndarray, shape (K,)
+            Unnormalized log-weights of the mixture components.
+
+        Returns
+        -------
+        DiagonalGaussianMixture
+            A GMM instance with diagonal covariance where all diagonal
+            entries are equal per component.
+
+        Raises
+        ------
+        ValueError
+            If `std` is not positive or inputs are invalid.
+        """
+        if std <= 0.0:
+            raise ValueError(
+                f"Standard deviation must be greater than zero but got {std=}"
+            )
+        scales = np.ones_like(means) * std
+        return DiagonalGaussianMixture(means, scales, logits)
+
+    @classmethod
+    def create_isotropic_uniform(
+        cls,
+        std: float,
+        n_components: int,
+        dim: int,
+        mean_range: tuple[float, float],
+        seed: int = 0,
+    ):
+        """
+        Construct an isotropic GMM with uniformly sampled means and equal weights.
+
+        Component means are sampled uniformly from the given range, and all
+        mixture weights are set to be equal.
+
+        Parameters
+        ----------
+        std : float
+            Shared standard deviation for all components and dimensions.
+            Must be positive.
+        n_components : int
+            Number of mixture components (K).
+        dim : int
+            Dimensionality of each component (D).
+        mean_range : tuple of float
+            Lower and upper bounds (min, max) for uniform sampling of means.
+        seed : int, optional
+            Random seed for reproducibility.
+
+        Returns
+        -------
+        DiagonalGaussianMixture
+            A GMM instance with:
+            - uniformly distributed means
+            - isotropic covariance
+            - uniform mixture weights
+
+        Notes
+        -----
+        The mixture weights are initialized as uniform, i.e.,
+        p(k) = 1 / K for all components.
+
+        Raises
+        ------
+        ValueError
+            If inputs are invalid.
+        """
+        rng = np.random.default_rng(seed)
+        means = rng.uniform(*mean_range, size=(n_components, dim))
+        logits = np.full((n_components,), fill_value=-np.log(n_components))
+        return cls.create_isotropic(means=means, std=std, logits=logits)
 
     def can_sample(self):
         return True
@@ -33,9 +186,7 @@ class DiagonalGaussianMixture(DispatchedTarget):
 
         K, D = means.shape
 
-        # Normalize mixture weights
-        log_probs = logits - logsumexp(logits)
-        probs = np.exp(log_probs)
+        probs = np.exp(logits)
 
         # Sample all components at once
         components = rng.choice(K, size=n_samples, p=probs)  # (N,)
@@ -123,9 +274,7 @@ class DiagonalGaussianMixture(DispatchedTarget):
 
         K, D = means.shape
 
-        # normalize mixture weights
-        component_log_probs = logits - logsumexp(logits)
-        component_probs = np.exp(component_log_probs)
+        component_probs = np.exp(logits)
 
         # component sampling (stream 1)
         components = rng_comp.choice(K, size=length, p=component_probs)
@@ -174,12 +323,6 @@ class DiagonalGaussianMixture(DispatchedTarget):
         )
 
 
-class IsotropicGaussianMixture(DiagonalGaussianMixture):
-    def __init__(self, means: np.ndarray, scale: float, logits: np.ndarray):
-        scales = np.ones_like(means) * scale
-        super().__init__(means, scales, logits)
-
-
 if __name__ == "__main__":
     import matplotlib.pyplot as plt
 
@@ -194,7 +337,7 @@ if __name__ == "__main__":
         ]
     )
 
-    scales = np.array(
+    diag_stds = np.array(
         [
             [0.8, 0.8],
             [0.5, 0.9],
@@ -204,7 +347,10 @@ if __name__ == "__main__":
 
     logits = np.log(np.array([0.4, 0.4, 0.2]))
 
-    target = DiagonalGaussianMixture(means, scales, logits)
+    target = DiagonalGaussianMixture(means, diag_stds, logits)
+    # target = DiagonalGaussianMixture.create_isotropic_uniform(
+    #    std=1.0, n_components=4, dim=2, mean_range=(-3, 3)
+    # )
 
     d1 = target.load_dataset(type="val", length=5, include_energies=True)
     d2 = target.load_dataset(type="val", length=10)
