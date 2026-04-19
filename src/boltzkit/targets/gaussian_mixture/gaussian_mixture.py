@@ -174,6 +174,23 @@ class DiagonalGaussianMixture(DispatchedTarget):
         logits = np.full((n_components,), fill_value=-np.log(n_components))
         return cls.create_isotropic(means=means, std=std, logits=logits)
 
+    @classmethod
+    def create_gmm40(
+        cls,
+        dim: int = 2,
+        n_components: int = 40,
+        loc_scaling: float = 40.0,
+        scale: float = 1.0,
+        seed: int = 0,
+    ):
+        return cls.create_isotropic_uniform(
+            std=scale,
+            n_components=n_components,
+            dim=dim,
+            mean_range=(-loc_scaling, loc_scaling),
+            seed=seed,
+        )
+
     def can_sample(self):
         return True
 
@@ -348,9 +365,7 @@ if __name__ == "__main__":
     logits = np.log(np.array([0.4, 0.4, 0.2]))
 
     target = DiagonalGaussianMixture(means, diag_stds, logits)
-    # target = DiagonalGaussianMixture.create_isotropic_uniform(
-    #    std=1.0, n_components=4, dim=2, mean_range=(-3, 3)
-    # )
+    target = DiagonalGaussianMixture.create_gmm40()
 
     d1 = target.load_dataset(type="val", length=5, include_energies=True)
     d2 = target.load_dataset(type="val", length=10)
@@ -369,8 +384,8 @@ if __name__ == "__main__":
     # -----------------------
     # Grid for density
     # -----------------------
-    x = np.linspace(-6, 6, 200)
-    y = np.linspace(-6, 6, 200)
+    x = np.linspace(-50, 50, 200)
+    y = np.linspace(-50, 50, 200)
     X, Y = np.meshgrid(x, y)
 
     grid = np.stack([X.ravel(), Y.ravel()], axis=-1)
@@ -386,7 +401,7 @@ if __name__ == "__main__":
     # -----------------------
     plt.figure(figsize=(7, 6))
 
-    plt.contourf(X, Y, probs, levels=50)
+    plt.contourf(X, Y, np.log(probs), levels=50)
 
     plt.scatter(
         samples[:, 0],
