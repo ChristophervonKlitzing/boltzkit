@@ -9,7 +9,7 @@ from boltzkit.utils.molecular.conversion import vec3_list_to_numpy
 
 from boltzkit.targets.base import NumPyTarget
 
-from boltzkit.utils.cached_repo import create_cached_repo
+from boltzkit.utils.cached_repo import CachedRepo, VirtualRepo, create_cached_repo
 from boltzkit.utils.dataset import Dataset
 from boltzkit.utils.molecular.energy_eval import (
     kB_in_eV_per_K,
@@ -64,7 +64,7 @@ def _parse_system_args(system_args: dict):
 class MolecularBoltzmann(NumPyTarget):
     def __init__(
         self,
-        path: str,
+        path: str | CachedRepo,
         *,
         n_workers: None | int = -1,
         openmm_platform: Literal["CPU", "CUDA"] | None = "CPU",
@@ -96,7 +96,8 @@ class MolecularBoltzmann(NumPyTarget):
         Parameters
         ----------
         path : str
-            Path to the repository that configures the system.
+            Path to the repository that configures the system or a cached repo instance.
+            In the latter case, no new cached repo is initialized but the provided one is used.
         n_workers : int or None, optional, default=-1
             Number of parallel workers for computations. -1 uses all available CPU cores,
             None means sequential evaluation. Applies to all platforms, but using a GPU
@@ -117,7 +118,14 @@ class MolecularBoltzmann(NumPyTarget):
                 f"Parallel energy & force evaluation ({n_workers=}) makes no sense when not using {openmm_platform=}"
             )
 
-        self._repo = create_cached_repo(path, **kwargs)
+        if isinstance(path, CachedRepo):
+            self._repo = path
+        elif isinstance(path, str):
+            self._repo = create_cached_repo(path, **kwargs)
+        else:
+            raise ValueError(
+                f"The provided 'path' must be either of type '{CachedRepo.__name__}' or '{str.__name__}' but got '{type(path).__name__}'"
+            )
 
         self._init_openmm()
 
@@ -140,6 +148,52 @@ class MolecularBoltzmann(NumPyTarget):
                 self._length_scale = 1.0
         else:
             self._length_scale = float(length_unit)
+
+    @classmethod
+    def create_from_pdb(
+        cls,
+        name: str,
+        pdb_fpath: str,
+        *,
+        forcefields: list[str] | tuple[str, ...] = (
+            "amber99sbildn.xml",
+            "amber99_obc.xml",
+        ),
+        temperature: float = 300.0,
+        cached_repo_args: dict | None = None,
+        boltzmann_args: dict | None = None,
+    ):
+        if not os.path.exists(pdb_fpath) and os.path.isfile(pdb_fpath):
+            raise ValueError(
+                f"The given 'pdb_fpath' string is not pointing to a file: '{pdb_fpath}'"
+            )
+
+        forcefield_str = "\n".join([f"  - {ff}" for ff in forcefields])
+
+        info_yaml = (
+            f"temperature: {temperature} \n"
+            "pdb_file: topology.pdb \n"
+            "forcefields: \n"
+            f"{forcefield_str}"
+        )
+
+        import shutil
+
+        pdb_copy_action = lambda dest_fpath: shutil.copy(pdb_fpath, dest_fpath)
+
+        file_tree = {"info.yaml": info_yaml, "topology.pdb": pdb_copy_action}
+
+        if cached_repo_args is None:
+            cached_repo_args = {}
+
+        virt_repo = create_cached_repo(
+            f"virtual://{name}", file_tree=file_tree, **cached_repo_args
+        )
+
+        if boltzmann_args is None:
+            boltzmann_args = {}
+
+        return MolecularBoltzmann(virt_repo, **boltzmann_args)
 
     def _get_system_args(self) -> dict:
         system_args = self._repo.config.get("system_args", {})
@@ -712,9 +766,12 @@ def print_z_matrix(z_matrix: list[tuple[int, int, int, int]]):
 
 if __name__ == "__main__":
     target = MolecularBoltzmann(
-        "datasets/chrklitz99/chignolin",
+        "datasets/chrklitz99/alanine_dipeptide",
         length_unit="nanometer",
         n_workers=None,
+    )
+    target = MolecularBoltzmann.create_from_pdb(
+        "test_bm", "target_cache/alanine_dipeptide/topology.pdb"
     )
 
     pos_min_energy = target.get_position_min_energy()

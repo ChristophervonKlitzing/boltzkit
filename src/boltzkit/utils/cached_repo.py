@@ -1,11 +1,12 @@
 from abc import ABC, abstractmethod
 from pathlib import Path
 import re
-from typing import Any
+from typing import Any, Callable, TypeAlias, Union
 from huggingface_hub import HfFileSystem, hf_hub_download, snapshot_download
 import yaml
 from pathlib import PurePosixPath
 from boltzkit.utils.key_value_store import FileKV
+from pathlib import PurePosixPath
 
 
 def strip_repo_prefix(full_path: str, repo_root: str) -> str:
@@ -191,6 +192,80 @@ class LocalRepo(CachedRepo):
         return "local_" + Path(uri).name
 
 
+Content: TypeAlias = str | bytes | Callable[[Path], None]
+"""
+str: Write text
+bytes: write binary
+Callable: creates file at path
+"""
+
+
+def normalize_path(path: str | PurePosixPath) -> str:
+    return str(PurePosixPath(path))
+
+
+class VirtualRepo(CachedRepo):
+    """
+    Creates cache directory from in-memory content,
+    i.e., cache dir is not backed by some form of directory or repository
+    """
+
+    def __init__(
+        self,
+        remote_uri,
+        local_repo_path,
+        lazy_load,
+        file_tree: dict[str, Content],
+    ):
+        """
+        remote_uri must have format 'virtual://<name>', e.g., 'virtual://foo',
+        which will create a cache dir with name 'virtual_foo'.
+        """
+        super().__init__(remote_uri, local_repo_path, lazy_load)
+
+        self._file_content_tree = {normalize_path(k): v for k, v in file_tree.items()}
+        self.post_init()
+
+    def load_file(self, relative_fpath):
+        relative_fpath = normalize_path(relative_fpath)
+        target_path = self.local_path / relative_fpath
+        target_path.parent.mkdir(parents=True, exist_ok=True)
+
+        content = self._file_content_tree[relative_fpath]
+
+        if isinstance(content, str):
+            target_path.write_text(content)
+            return target_path
+
+        if isinstance(content, bytes):
+            target_path.write_bytes(content)
+            return target_path
+
+        # Callable case: responsible for writing the file itself
+        content(target_path)
+
+        # Optional safety check
+        if not target_path.exists():
+            raise RuntimeError(f"Callable did not create file: {relative_fpath}")
+
+        return target_path
+
+    def load_all_files(self):
+        for path in self._file_content_tree.keys():
+            self.load_file(path)
+
+    def list_remote_files(self):
+        return list(self._file_content_tree.keys())
+
+    @classmethod
+    def match_uri(cls, uri):
+        return uri.startswith("virtual://")
+
+    @classmethod
+    def get_name_from_uri(cls, uri):
+        return "virtual_" + uri.removeprefix("virtual://")
+
+
 def create_cached_repo(
     uri: str,
     local_repos_dir: Path = Path("target_cache"),
@@ -201,7 +276,10 @@ def create_cached_repo(
     Creates CachedRepo object from the given URI (Unified Resource Identifier).
     The type of the CachedRepo is automatically determined by the given URI.
     """
-    classes: list[type[CachedRepo]] = [HuggingfaceRepo, LocalRepo]
+    classes: list[type[CachedRepo]] = [HuggingfaceRepo, LocalRepo, VirtualRepo]
+
+    if isinstance(local_repos_dir, str):
+        local_repos_dir = Path(local_repos_dir)
 
     for cls in classes:
         if cls.match_uri(uri):
@@ -231,3 +309,9 @@ if __name__ == "__main__":
     print(sys_info.config)
 
     print(sys_info.find_file(".*\.pdb"))
+
+    virtual_repo = create_cached_repo(
+        "virtual://test", file_tree={"data/test.yaml": "Hello world"}
+    )
+    virtual_repo.load_file("data/test.yaml")
+    print(virtual_repo.list_remote_files())
