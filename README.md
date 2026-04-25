@@ -1,5 +1,6 @@
 ![Tests (main)](https://img.shields.io/github/actions/workflow/status/ChristophervonKlitzing/boltzkit/run-tests.yaml?branch=main&label=tests%20(main))
 ![Tests (dev)](https://img.shields.io/github/actions/workflow/status/ChristophervonKlitzing/boltzkit/run-tests.yaml?branch=dev&label=tests%20(dev))
+[![Docs](https://img.shields.io/badge/docs-online-blue)](https://christophervonklitzing.github.io/boltzkit/)
 
 # The boltzkit package
 `boltzkit` is a Python package for working with molecular Boltzmann and related densities.
@@ -10,6 +11,13 @@ The package is designed to make it as simple as possible to:
 - compute forces / scores
 - evaluate predicted samples
 
+## Documentation
+Full documentation (installation, tutorials, and API reference):
+
+👉 https://christophervonklitzing.github.io/boltzkit/
+
+
+# vvv Deprecated vvv
 See the [Evaluation](#create-and-run-evaluation-pipeline) and 
 [Create Target Systems](#create-target-systems) sections.
 
