@@ -9,6 +9,8 @@ boltzkit documentation
 
 Welcome to the documentation for **boltzkit**.
 
+
+
 .. toctree::
    :maxdepth: 2
    :caption: Contents:
@@ -16,3 +18,5 @@ Welcome to the documentation for **boltzkit**.
    installation
    targets
    evaluation
+   api/index
+

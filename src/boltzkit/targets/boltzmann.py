@@ -62,6 +62,10 @@ def _parse_system_args(system_args: dict):
 
 
 class MolecularBoltzmann(NumPyTarget):
+    """
+    awd
+    """
+
     def __init__(
         self,
         path: str | CachedRepo,

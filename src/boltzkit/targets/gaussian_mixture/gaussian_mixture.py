@@ -15,29 +15,13 @@ class DiagonalGaussianMixture(DispatchedTarget):
     dimensions, i.e., a diagonal covariance matrix. The covariance of each
     component k is given by:
 
+    .. math::
         Σ_k = diag(σ_{k,1}^2, ..., σ_{k,D}^2)
 
     where `diag_stds[k, d] = σ_{k,d}` are the standard deviations.
 
     The mixture weights are parameterized by `logits`, which are internally
     normalized to log-probabilities.
-
-    Parameters
-    ----------
-    means : np.ndarray, shape (K, D)
-        Mean vectors of the mixture components, where K is the number of
-        components and D is the dimensionality.
-    diag_stds : np.ndarray, shape (K, D)
-        Per-component, per-dimension standard deviations (not variances).
-        Must be strictly positive.
-    logits : np.ndarray, shape (K,)
-        Unnormalized log-weights of the mixture components. These are
-        normalized internally via log-softmax.
-
-    Raises
-    ------
-    ValueError
-        If input shapes are inconsistent or invalid.
     """
 
     def __init__(
@@ -47,9 +31,24 @@ class DiagonalGaussianMixture(DispatchedTarget):
         logits: np.ndarray,
     ):
         """
-        Initialize a diagonal-covariance Gaussian mixture model.
+            Initialize a diagonal-covariance Gaussian mixture model.
 
-        See class docstring for full parameter description.
+                Parameters
+        ----------
+        means : np.ndarray, shape (K, D)
+            Mean vectors of the mixture components, where K is the number of
+            components and D is the dimensionality.
+        diag_stds : np.ndarray, shape (K, D)
+            Per-component, per-dimension standard deviations (not variances).
+            Must be strictly positive.
+        logits : np.ndarray, shape (K,)
+            Unnormalized log-weights of the mixture components. These are
+            normalized internally via log-softmax.
+
+        Raises
+        ------
+        ValueError
+            If input shapes are inconsistent or invalid.
         """
 
         # Basic dimensionality check first (prevents cryptic index errors)

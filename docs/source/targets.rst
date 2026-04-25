@@ -5,4 +5,5 @@ Targets
 Available target distributions:
 
 
-.. autoclass_all:: boltzkit.targets 
+- :class:`boltzkit.targets.DiagonalGaussianMixture`
+- :class:`boltzkit.targets.MolecularBoltzmann`
