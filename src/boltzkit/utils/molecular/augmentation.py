@@ -2,9 +2,10 @@ import math
 from typing import Optional, Callable, TYPE_CHECKING
 import numpy as np
 from scipy.spatial.transform import Rotation as R
-from boltzkit.utils.framework import Array, create_dispatch
+from boltzkit.utils.framework import create_dispatch
 
 if TYPE_CHECKING:
+    from boltzkit.utils.framework import Array
     import torch
 
 
@@ -16,7 +17,7 @@ def create_symmetry_augmentation(
     sigma: Optional[float] = None,
     rotation_augmentation: bool = True,
     COM_augmentation: bool = True,
-) -> Callable[[Array, bool | None, bool | None, bool | None], Array]:
+) -> Callable[["Array", bool | None, bool | None, bool | None], "Array"]:
     """
     Create a rotation and center-of-mass translation augmentation function.
 
