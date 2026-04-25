@@ -24,6 +24,7 @@ jobs:
 
       - name: Install dependencies
         run: |
+          pip install openmm
           pip install -e .
           pip install sphinx sphinx-rtd-theme myst-parser
 
