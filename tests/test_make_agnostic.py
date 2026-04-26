@@ -7,9 +7,8 @@ from typing import TYPE_CHECKING
 
 from boltzkit.utils.framework import make_agnostic
 
-
 if TYPE_CHECKING:
-    from boltzkit.utils.framework import Array
+    from boltzkit.utils.framework import UnionArrayType
 
 
 def log_prob_np(x: np.ndarray):  # batched
@@ -51,7 +50,7 @@ class TestAgnosticFunctions(unittest.TestCase):
         }
 
         # Map array types
-        self.arrays: dict[str, Array] = {
+        self.arrays: dict[str, "UnionArrayType"] = {
             "numpy": self.x_np,
             "torch": self.x_torch,
             "jax": self.x_jax,

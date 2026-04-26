@@ -187,6 +187,9 @@ class DispatchedTarget(BaseTarget):
         return self.__torch_eval_cache
 
     def get_log_prob_and_score(self, x):
+        """
+        Dispatches logprob and score evaluation to the numpy, jax, or pytorch implementation depending on the input type x.
+        """
         framework = detect_framework(x)
         if framework == "numpy":
             return self.__np_eval.get_log_prob_and_score(x)

@@ -14,12 +14,11 @@ if TYPE_CHECKING:
     import torch
     import jax
 
-    Array = Union[np.ndarray, "torch.Tensor", "jax.Array"]
+UnionArrayType = Union[np.ndarray, "torch.Tensor", "jax.Array"]
+GenericArrayType = TypeVar("GenericArrayType", np.ndarray, "torch.Tensor", "jax.Array")
 
-GenericArrayType = TypeVar("T", np.ndarray, "torch.Tensor", "jax.Array")
 
-
-def is_torch_tensor(x) -> bool:
+def is_torch_tensor(x: GenericArrayType) -> bool:
     try:
         global torch
         import torch
@@ -28,7 +27,7 @@ def is_torch_tensor(x) -> bool:
     return isinstance(x, torch.Tensor)
 
 
-def is_jax_array(x) -> bool:
+def is_jax_array(x: GenericArrayType) -> bool:
     try:
         global jax
         import jax
@@ -40,7 +39,7 @@ def is_jax_array(x) -> bool:
 FrameworkName = Literal["numpy", "jax", "pytorch"]
 
 
-def detect_framework(x: "Array") -> FrameworkName:
+def detect_framework(x: GenericArrayType) -> FrameworkName:
     if isinstance(x, np.ndarray):
         return "numpy"
     elif is_torch_tensor(x):
@@ -79,7 +78,7 @@ def create_pytorch_value_and_grad_fn(
     return value_and_grad_fn
 
 
-def to_numpy(x: "Array", source_framework: FrameworkName) -> np.ndarray:
+def to_numpy(x: GenericArrayType, source_framework: FrameworkName) -> np.ndarray:
     if source_framework == "numpy":
         return x
     elif source_framework == "pytorch":
@@ -130,7 +129,9 @@ def from_numpy(
         raise ValueError(f"Unknown framework of name '{target_framework}'")
 
 
-def from_numpy_recursive(x: Any, target_framework: FrameworkName, style=None):
+def from_numpy_recursive(
+    x: GenericArrayType | Any, target_framework: FrameworkName, style=None
+):
     if isinstance(x, np.ndarray):
         return from_numpy(x, target_framework, style=style)
     if isinstance(x, list):
@@ -181,9 +182,12 @@ class FrameworkAgnosticFunction:
     def __init__(
         self,
         impl_framework: FrameworkName,
-        value_fn: Callable[["Array"], "Array"],
-        grad_fn: None | Callable[["Array"], "Array"] = None,
-        value_and_grad_fn: None | Callable[["Array"], tuple["Array", "Array"]] = None,
+        value_fn: Callable[[GenericArrayType], GenericArrayType],
+        grad_fn: None | Callable[[GenericArrayType], GenericArrayType] = None,
+        value_and_grad_fn: (
+            None
+            | Callable[[GenericArrayType], tuple[GenericArrayType, GenericArrayType]]
+        ) = None,
     ):
         assert (grad_fn is None) == (value_and_grad_fn is None)
 
@@ -192,17 +196,17 @@ class FrameworkAgnosticFunction:
         self._grad_fn = grad_fn
         self._value_and_grad_fn = value_and_grad_fn
 
-    def __call__(self, x: "Array"):
+    def __call__(self, x: GenericArrayType):
         return self.get_value(x)
 
-    def get_value(self, x: "Array") -> "Array":
+    def get_value(self, x: GenericArrayType) -> GenericArrayType:
         if is_torch_tensor(x) and x.requires_grad and self._impl_framework != "pytorch":
             f = _create_pytorch_autograd_func(self._value_and_grad_fn)
             return f.apply(x)
         else:
             return self._value_fn(x)
 
-    def get_grad(self, x: "Array") -> "Array":
+    def get_grad(self, x: GenericArrayType) -> GenericArrayType:
         if self._grad_fn is None:
             raise NotImplementedError("Gradients are not supported for this function")
         grad = self._grad_fn(x)
@@ -211,7 +215,9 @@ class FrameworkAgnosticFunction:
             grad = grad.detach()
         return grad
 
-    def get_value_and_grad(self, x: "Array") -> tuple["Array", "Array"]:
+    def get_value_and_grad(
+        self, x: GenericArrayType
+    ) -> tuple[GenericArrayType, GenericArrayType]:
         if self._value_and_grad_fn is None:
             raise NotImplementedError("Gradients are not supported for this function")
 
@@ -231,10 +237,10 @@ class FrameworkAgnosticFunction:
 
 def make_agnostic_simple(*, implementation: FrameworkName):
     def decorator(
-        value_fn: Callable[["Array"], "Array"],
+        value_fn: Callable[[GenericArrayType], GenericArrayType],
     ):
         # Framework agnostic value function
-        def wrapped_value_fn(x: "Array"):
+        def wrapped_value_fn(x: GenericArrayType):
             detected_framework = detect_framework(x)
 
             if detected_framework == implementation:
@@ -278,9 +284,11 @@ def try_jit_jax(f: T) -> T:
 def make_agnostic(
     *,
     implementation: FrameworkName,
-    grad_fn: None | Callable[["Array"], "Array"] = None,
-    value_and_grad_fn: None | Callable[["Array"], tuple["Array", "Array"]] = None,
-    value_fn: None | Callable[["Array"], "Array"] = None,
+    grad_fn: None | Callable[[GenericArrayType], GenericArrayType] = None,
+    value_and_grad_fn: (
+        None | Callable[[GenericArrayType], tuple[GenericArrayType, GenericArrayType]]
+    ) = None,
+    value_fn: None | Callable[[GenericArrayType], GenericArrayType] = None,
 ):
     """
     Make a function agnostic to NumPy, JAX, or PyTorch.
@@ -371,7 +379,7 @@ def make_agnostic(
         import torch
 
     def decorator(
-        value_fn: Callable[["Array"], "Array"],
+        value_fn: Callable[[GenericArrayType], GenericArrayType],
         grad_fn=grad_fn,
         value_and_grad_fn=value_and_grad_fn,
     ):

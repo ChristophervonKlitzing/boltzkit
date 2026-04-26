@@ -5,9 +5,9 @@ from scipy.spatial.transform import Rotation as R
 from boltzkit.utils.framework import create_dispatch
 
 if TYPE_CHECKING:
-    from boltzkit.utils.framework import Array
     import torch
 
+from boltzkit.utils.framework import GenericArrayType
 
 # TODO: Add seed argument and use numpy rng for both implementations
 # TODO: Add test with if __name__ == "__main__"
@@ -17,7 +17,9 @@ def create_symmetry_augmentation(
     sigma: Optional[float] = None,
     rotation_augmentation: bool = True,
     COM_augmentation: bool = True,
-) -> Callable[["Array", bool | None, bool | None, bool | None], "Array"]:
+) -> Callable[
+    [GenericArrayType, bool | None, bool | None, bool | None], GenericArrayType
+]:
     """
     Create a rotation and center-of-mass translation augmentation function.
 
