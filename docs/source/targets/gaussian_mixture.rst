@@ -108,18 +108,16 @@ A deterministic synthetic dataset can be generated via:
    dataset = target.load_dataset(
        type="val",
        length=1000,
-       seed=0,
-       include_samples=True,
-       include_energies=True,
-       include_forces=False
+       # + optional arguments to automatically include log_probs and/or scores
    )
+   
 
 Properties:
 
-- Deterministic for fixed ``(type, seed)``
+- Deterministic for fixed ``(type, seed)``, defines the entire infinite sequence of samples
 - Reproducible across calls
-- Supports ``train``, ``val``, ``test``, and ``seed`` splits
-
+- Supports ``train``, ``val``, ``test`` splits
+- Returns the first ``length`` samples of the sequence; increasing ``length`` preserves the existing prefix and appends additional samples without actually caching anything using procedural generation.
 
 Interpretation
 --------------
