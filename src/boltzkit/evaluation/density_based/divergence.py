@@ -5,21 +5,31 @@ from boltzkit.utils.shape_utils import squeeze_last_dim
 
 def get_reverse_logZ(log_weights: np.ndarray) -> float:
     """
-    Estimate the log-normalization constant of p(x) using samples from q(x).
+    Estimate the log-normalization constant of :math:`\\tilde{p}(x)` using samples from q(x).
 
-    This is the "reverse" estimate of log Z, appropriate when
-    x ~ q(x) and log_weights = log p(x) - log q(x).
+    For :math:`x \\sim q(x)`,
+
+    .. math::
+
+        \\log w(x) = \\log \\tilde{p}(x) - \\log q(x), \\quad
+        Z_r = \\mathbb{E}_q[w].
+
+    Therefore,
+
+    .. math::
+
+        \\log Z_r = \\log \\mathbb{E}_q[w].
 
     Parameters
     ----------
     log_weights : np.ndarray
-        Log importance weights of shape (batch,) or (batch, 1),
-        i.e., log p(x) - log q(x) for samples x ~ q(x).
+        Log importance weights, i.e.,
+        :math:`\\log \\tilde{p}(x) - \\log q(x)` for samples :math:`x \\sim q(x)`.
 
     Returns
     -------
     float
-        Estimated log-normalization constant log Z.
+        Estimated :math:`\\log Z_r`.
     """
     logZ = _logsumexp(log_weights) - np.log(log_weights.shape[0])
     return float(logZ)
@@ -27,21 +37,31 @@ def get_reverse_logZ(log_weights: np.ndarray) -> float:
 
 def get_forward_logZ(log_weights: np.ndarray) -> float:
     """
-    Estimate the log-normalization constant of p(x) using samples from p(x).
+    Estimate the log-normalization constant of :math:`\\tilde{p}(x)` using samples from p(x).
 
-    This is the "forward" estimate of log Z, appropriate when
-    x ~ p(x) and log_weights = log p(x) - log q(x) (p can be unnormalized).
+    For :math:`x \\sim p(x)`,
+
+    .. math::
+
+        \\log w(x) = \\log \\tilde{p}(x) - \\log q(x), \\quad
+        Z_f = 1/\\mathbb{E}_p[1/w].
+
+    Therefore,
+
+    .. math::
+
+        \\log Z_f = -\\log \\mathbb{E}_p[1/w].
 
     Parameters
     ----------
     log_weights : np.ndarray
-        Log weights of shape (batch,) or (batch, 1),
-        i.e., log p(x) - log q(x) for samples x ~ p(x).
+        Log weights, i.e.,
+        :math:`\\log \\tilde{p}(x) - \\log q(x)` for samples :math:`x \\sim p(x)`.
 
     Returns
     -------
     float
-        Estimated log-normalization constant log Z for p.
+        Estimated :math:`\\log Z_f`.
     """
     logZ = -_logsumexp(-log_weights) + np.log(log_weights.shape[0])
     return float(logZ)
@@ -49,16 +69,24 @@ def get_forward_logZ(log_weights: np.ndarray) -> float:
 
 def get_kl_divergence_q(log_weights: np.ndarray, logZ: float | None = None):
     """
-    Compute the importance-weighted forward KL using samples from q:
-        KL(p || q) = E_q[ w(x) * log w(x) ],  w(x) = p(x)/q(x)
+    Compute the importance-weighted forward KL using samples from q.
+
+    For :math:`x \\sim q(x)`,
+
+    .. math::
+
+        \\log w(x) = \\log p(x) - \\log q(x), \\quad
+        \\mathrm{KL}(p \\| q) = \\mathbb{E}_q[w \\log w].
 
     Parameters
     ----------
     log_weights : np.ndarray
-        Log importance weights of shape (batch, 1) or (batch,): log p(x) - log q(x), x ~ q(x)
+        Unnormalized log importance weights, i.e.,
+        :math:`\\log \\tilde{p}(x) - \\log q(x)` for samples :math:`x \\sim q(x)`.
+
     logZ : float | None
-        Log normalization constant of weights, if known.
-        If None, logZ is estimated using `log_weights` (reverse estimate)
+        Log normalization constant (or estimate thereof) of :math:`\\tilde{p}`.
+        If None, estimated from ``log_weights``.
 
     Returns
     -------
@@ -78,21 +106,29 @@ def get_kl_divergence_q(log_weights: np.ndarray, logZ: float | None = None):
 
 def get_kl_divergence_p(log_weights: np.ndarray, logZ: float | None = None):
     """
-    Compute the forward KL using samples from p:
-        KL(p || q) = E_p[ log w(x) ],  w(x) = p(x)/q(x)
+    Compute the forward KL using samples from p.
+
+    For :math:`x \\sim p(x)`,
+
+    .. math::
+
+        \\log w(x) = \\log p(x) - \\log q(x), \\quad
+        \\mathrm{KL}(p \\| q) = \\mathbb{E}_p[\\log w].
 
     Parameters
     ----------
     log_weights : np.ndarray
-        Log importance weights of shape (batch, 1) or (batch,): log p(x) - log q(x), x ~ p(x)
+        Unnormalized log importance weights, i.e.,
+        :math:`\\log \\tilde{p}(x) - \\log q(x)` for samples :math:`x \\sim p(x)`.
+
     logZ : float | None
-        Log normalization constant of weights, if known.
-        If None, logZ is estimated using `log_weights` (forward estimate)
+        Log normalization constant (or estimate thereof) of :math:`\\tilde{p}`.
+        If None, estimated from ``log_weights``.
 
     Returns
     -------
     float
-        forward KL estimate.
+        Forward KL estimate.
     """
     log_weights = squeeze_last_dim(log_weights)
 
@@ -108,31 +144,43 @@ def get_alpha_divergence_q(
     log_weights: np.ndarray, alpha: float, logZ: float | None = None
 ):
     """
-    Estimate the Amari α-divergence D_alpha(p || q) using samples from q(x).
+    Estimate the Amari α-divergence using samples from q(x).
 
-    This is an **importance-weighted** estimator:
-    D_alpha(p || q) = (E_{x~q}[(p(x)/q(x))^alpha] - 1) / (alpha*(alpha-1))
+    For :math:`x \\sim q(x)`,
 
-    This implementation is valid only for α ≠ 0, 1.
-    Using the mapping α = (1 + β) / 2, this function recovers the
-    Amari α-divergence for β ≠ -1, 1.
-    In the limits β → -1 and β → +1 (equivalently α → 0 and α → 1),
-    the divergence converges to KL(q || p) and KL(p || q), respectively.
+    .. math::
+
+        \\log w(x) = \\log p(x) - \\log q(x), \\quad
+        D_\\alpha(p \\| q)
+        =
+        \\frac{\\mathbb{E}_q[w^{\\alpha}] - 1}{\\alpha(\\alpha - 1)}.
+
+    Using the mapping :math:`\\alpha = (1 + \\beta)/2`, this corresponds to the
+    Amari α-divergence for :math:`\\beta \\neq -1, 1`. In the limits
+    :math:`\\beta \\to -1` and :math:`\\beta \\to 1`
+    (equivalently :math:`\\alpha \\to 0` and :math:`\\alpha \\to 1`),
+    it recovers :math:`\\mathrm{KL}(q \\| p)` and :math:`\\mathrm{KL}(p \\| q)`,
+    respectively.
 
     Parameters
     ----------
     log_weights : np.ndarray
-        Log importance weights of shape (batch, 1) or (batch,): log p(x) - log q(x), x ~ q(x)
+        Unnormalized log importance weights, i.e.,
+        :math:`\\log \\tilde{p}(x) - \\log q(x)` for samples :math:`x \\sim q(x)`.
+
     alpha : float
-        The α parameter of the divergence (α ≠ 0, 1).
-        In the limits α → 0 and α → 1, the α-divergence recovers
-        KL(q || p) and KL(p || q), respectively.
+        The α parameter (:math:`\\alpha \\neq 0, 1`).
+
+    logZ : float | None
+        Log normalization constant (or estimate thereof) of :math:`\\tilde{p}`.
+        If None, estimated from ``log_weights``.
 
     Returns
     -------
     float
-        Estimate of the α-divergence using samples from q(x).
+        Estimate of the α-divergence.
     """
+
     log_weights = squeeze_last_dim(log_weights)
     logN: float = np.log(log_weights.shape[0])
 
@@ -149,31 +197,41 @@ def get_alpha_divergence_p(
     log_weights: np.ndarray, alpha: float, logZ: float | None = None
 ):
     """
-    Estimate the Amari α-divergence D_alpha(p || q) using samples from p(x).
+    Estimate the Amari α-divergence using samples from p(x).
 
-    This is an estimator with expectation over p:
-    D_alpha(p || q) = (E_{x~p}[(p(x)/q(x))^(alpha-1)] - 1) / (alpha*(alpha-1))
+    For :math:`x \\sim p(x)`,
 
-    This implementation is valid only for α ≠ 0, 1.
-    Using the mapping α = (1 + β) / 2, this function recovers the
-    Amari α-divergence for β ≠ -1, 1.
-    In the limits β → -1 and β → +1 (equivalently α → 0 and α → 1),
-    the divergence converges to KL(q || p) and KL(p || q), respectively.
+    .. math::
+
+        \\log w(x) = \\log p(x) - \\log q(x), \\quad
+        D_\\alpha(p \\| q)
+        =
+        \\frac{\\mathbb{E}_p[w^{\\alpha - 1}] - 1}{\\alpha(\\alpha - 1)}.
+
+    Using the mapping :math:`\\alpha = (1 + \\beta)/2`, this corresponds to the
+    Amari α-divergence for :math:`\\beta \\neq -1, 1`. In the limits
+    :math:`\\beta \\to -1` and :math:`\\beta \\to 1`
+    (equivalently :math:`\\alpha \\to 0` and :math:`\\alpha \\to 1`),
+    it recovers :math:`\\mathrm{KL}(q \\| p)` and :math:`\\mathrm{KL}(p \\| q)`,
+    respectively.
 
     Parameters
     ----------
     log_weights : np.ndarray
-        Log importance weights of shape (batch, 1) or (batch,): log p(x) - log q(x), x ~ p(x).
-        Can be computed from unnormalized p(x) and normalized q(x).
+        Unnormalized log importance weights, i.e.,
+        :math:`\\log \\tilde{p}(x) - \\log q(x)` for samples :math:`x \\sim p(x)`.
+
     alpha : float
-        The α parameter of the divergence (α ≠ 0, 1).
-        In the limits α → 0 and α → 1, the α-divergence recovers
-        KL(q || p) and KL(p || q), respectively.
+        The α parameter (:math:`\\alpha \\neq 0, 1`).
+
+    logZ : float | None
+        Log normalization constant (or estimate thereof) of :math:`\\tilde{p}`.
+        If None, estimated from ``log_weights``.
 
     Returns
     -------
     float
-        Estimate of the α-divergence using samples from p(x).
+        Estimate of the α-divergence.
     """
     log_weights = squeeze_last_dim(log_weights)
     logN: float = np.log(log_weights.shape[0])

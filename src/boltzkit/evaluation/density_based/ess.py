@@ -6,32 +6,35 @@ from boltzkit.utils.shape_utils import squeeze_last_dim
 
 def get_reverse_ess(log_weights: np.ndarray) -> float:
     """
-    Compute the reverse effective sample size (ESS) from log-weights.
+    Compute the reverse effective sample size (ESS) from log-importance weights.
 
-    Reverse ESS is used in importance sampling to measure how well
-    samples from a proposal distribution `q(x)` cover a target distribution `p(x)`.
+    Reverse ESS measures how well a proposal distribution :math:`q(x)` covers a
+    target distribution :math:`p(x)` in importance sampling.
 
-    Formula (self-normalized ESS):
-        ESS = (sum_i w_i)^2 / (N * sum_i w_i^2)
-    where w_i = exp(log_weights[i]).
+    Using weights :math:`w_i = \\exp(\\log p(x_i) - \\log q(x_i))`, the ESS is:
 
-    Key points about log_weights:
+    .. math::
 
-    - log_weights[i] = log p(x_i) - log q(x_i), where x_i ~ q(x) (proposal samples)
-    - Both q(x) & p(x) do **not need to be normalized**
-    - Using log-weights allows numerically stable computation, especially when p/q varies widely
+        \\mathrm{ESS} = \\frac{\\left(\\sum_i w_i\\right)^2}{N \\sum_i w_i^2}
+
+    Log-form computation is used for numerical stability.
 
     Parameters
     ----------
     log_weights : np.ndarray
-        Array of log importance weights (log p(x) - log q(x))
-        computed from samples x_i drawn from the proposal q(x).
+        Log importance weights:
+
+        .. math::
+
+            \\log w_i = \\log p(x_i) - \\log q(x_i)
+
+        where :math:`x_i \\sim q(x)`.
 
     Returns
     -------
-    ess : float
-        Reverse ESS, normalized to the range (0, 1], representing the effective fraction of
-        samples contributing to the estimate.
+    float
+        Reverse ESS in :math:`(0, 1]`, representing the effective fraction of
+        useful samples.
     """
     log_weights = squeeze_last_dim(log_weights)
 
@@ -46,33 +49,36 @@ def get_reverse_ess(log_weights: np.ndarray) -> float:
 
 def get_forward_ess(log_weights: np.ndarray) -> float:
     """
-    Compute the forward effective sample size (ESS) from log-weights.
+    Compute the forward effective sample size (ESS) from log-importance weights.
 
-    Forward ESS is symmetric in weights and their inverse,
-    and is typically used when samples are drawn from the **target distribution** `p(x)`:
+    Forward ESS measures overlap quality when samples are drawn from the target
+    distribution :math:`p(x)` and reweighted toward a proposal :math:`q(x)`.
 
-    ESS = 1 / (E_p[w] * E_p[1/w]),
-    where w = exp(log_weights).
+    It is defined as:
 
-    Key points about log_weights:
+    .. math::
 
-    - log_weights[i] = log p(x_i) - log q(x_i), where x_i ~ p(x) (target samples)
-    - Both q(x) & p(x) do **not need to be normalized**
-    - Forward ESS detects poor overlap between target and proposal:
-        - ESS is close to 1 if q and p align well
-        - ESS decreases if q under-samples p
+        \\mathrm{ESS} =
+        \\frac{1}{\\mathbb{E}_p[w] \\; \\mathbb{E}_p[1/w]}
+
+    where :math:`w = \\exp(\\log p(x) - \\log q(x))`.
 
     Parameters
     ----------
     log_weights : np.ndarray
-        Array of log importance weights ±(log p(x) - log q(x))
-        computed from samples x_i drawn from the target distribution p(x).
+        Log importance weights:
+
+        .. math::
+
+            \\log w_i = \\log p(x_i) - \\log q(x_i)
+
+        where :math:`x_i \\sim p(x)`.
 
     Returns
     -------
-    ess : float
-        Forward ESS, normalized to (0, 1], representing the effective fraction of
-        target samples that are well-represented by the proposal distribution.
+    float
+        Forward ESS in :math:`(0, 1]`, indicating how well the proposal
+        distribution represents the target distribution.
     """
     log_weights = squeeze_last_dim(log_weights)
 

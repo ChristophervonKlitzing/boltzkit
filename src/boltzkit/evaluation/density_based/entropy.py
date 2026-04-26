@@ -6,19 +6,25 @@ from boltzkit.utils.shape_utils import squeeze_last_dim
 
 def get_shannon_entropy(log_probs: np.ndarray) -> float:
     """
-    Compute the Shannon entropy of the **normalized** distribution q(x).
+    Compute the Shannon entropy of a normalized distribution.
 
-    Approximates H[q] = -E_q[log q(x)] using Monte Carlo samples.
+    Approximates:
+
+    .. math::
+
+        H[p] = -\\mathbb{E}_{p(x)}[\\log p(x)]
+
+    using Monte Carlo samples.
 
     Parameters
     ----------
     log_probs : np.ndarray
-        log-probabilities of samples under the proposal q(x).
+        Log-probabilities of samples under the normalized distribution.
 
     Returns
     -------
     float
-        Estimated entropy of q(x).
+        Estimated Shannon entropy.
     """
     log_probs = squeeze_last_dim(log_probs)
     return float(-log_probs.mean())
@@ -26,26 +32,36 @@ def get_shannon_entropy(log_probs: np.ndarray) -> float:
 
 def get_tsallis_entropy(log_probs: np.ndarray, q: float) -> float:
     """
-    Compute the Tsallis entropy of a distribution from log-probabilities.
+    Compute the Tsallis entropy from log-probabilities.
 
-    The Tsallis entropy of order q != 1 is defined as:
-        H_q[p] = (1 - E_p[p(x)^(q-1)]) / (q - 1)
-    where the expectation is over x ~ p(x).
+    The Tsallis entropy of order :math:`q \\neq 1` is:
 
-    This implementation works directly with log-probabilities for numerical stability:
-        p(x)^(q-1) = exp((q-1) * log p(x))
+    .. math::
+
+        H_q[p] = \\frac{1 - \\mathbb{E}_p[p(x)^{q-1}]}{q - 1}
+
+    Using log-probabilities for numerical stability:
+
+    .. math::
+
+        p(x)^{q-1} = \\exp((q - 1) \\log p(x))
 
     Parameters
     ----------
     log_probs : np.ndarray
-        Log-probabilities of samples under the **normalized** distribution p(x).
+        Log-probabilities of samples under a normalized distribution.
     q : float
-        Tsallis entropy parameter (q != 1).
+        Entropy parameter. Must satisfy :math:`q \\neq 1`.
 
     Returns
     -------
     float
         Estimated Tsallis entropy.
+
+    Raises
+    ------
+    ValueError
+        If ``q == 1.0`` (use Shannon entropy instead).
     """
     if q == 1.0:
         raise ValueError(

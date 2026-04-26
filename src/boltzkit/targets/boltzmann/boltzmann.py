@@ -9,7 +9,7 @@ from boltzkit.utils.molecular.conversion import vec3_list_to_numpy
 
 from boltzkit.targets.base import NumPyTarget
 
-from boltzkit.utils.cached_repo import CachedRepo, VirtualRepo, create_cached_repo
+from boltzkit.utils.cached_repo import CachedRepo, create_cached_repo
 from boltzkit.utils.dataset import Dataset
 from boltzkit.utils.molecular.energy_eval import (
     kB_in_eV_per_K,
@@ -63,7 +63,15 @@ def _parse_system_args(system_args: dict):
 
 class MolecularBoltzmann(NumPyTarget):
     """
-    awd
+    Molecular energy-based Boltzmann target using OpenMM.
+
+    Represents a probability density of the form:
+
+    .. math::
+        p(x) \\propto \\exp\\left(-\\frac{E(x)}{k_B T}\\right)
+
+    where energies and forces are computed using an OpenMM system
+    constructed from a cached molecular repository.
     """
 
     def __init__(
@@ -81,16 +89,16 @@ class MolecularBoltzmann(NumPyTarget):
 
         This class handles conversion of positions to the appropriate length scale
         and sets up the OpenMM System from the given repository path, e.g., a Hugging Face
-        repository such as `datasets/chrklitz99/alanine_dipeptide`.
+        repository such as ``datasets/chrklitz99/alanine_dipeptide``.
 
-        ### Number of workers and OpenMM platform
+        **Number of workers and OpenMM platform**
 
         There are effectively two sensible modes for evaluation:
 
-        1. **CPU mode**: `openmm_platform="CPU"` and `n_workers=-1` or a positive integer
+        1. **CPU mode**: ``openmm_platform="CPU"`` and ``n_workers=-1`` or a positive integer
         (performs batch evaluation in parallel across multiple processes).
 
-        2. **GPU mode**: `openmm_platform="CUDA"` and `n_workers=None`
+        2. **GPU mode**: ``openmm_platform="CUDA"`` and ``n_workers=None``
         (performs sequential batch evaluation on a single GPU).
 
         If training itself is parallelized across multiple GPUs, mode 2 can be appropriate,
@@ -103,17 +111,33 @@ class MolecularBoltzmann(NumPyTarget):
             Path to the repository that configures the system or a cached repo instance.
             In the latter case, no new cached repo is initialized but the provided one is used.
         n_workers : int or None, optional, default=-1
-            Number of parallel workers for computations. -1 uses all available CPU cores,
-            None means sequential evaluation. Applies to all platforms, but using a GPU
+            Number of parallel workers for computations. :math:`-1` uses all available CPU cores,
+            ``None`` means sequential evaluation. Applies to all platforms, but using a GPU
             (CUDA) with multiple workers triggers a warning because parallel evaluation
             makes little sense on a single GPU.
         openmm_platform : {"CPU", "CUDA"} or None, optional, default="CPU"
-            OpenMM computation platform to use. None lets OpenMM select CUDA if available,
-            with a fallback to CPU. Parallel evaluation (`n_workers`) always applies, but
+            OpenMM computation platform to use. ``None`` lets OpenMM select CUDA if available,
+            with a fallback to CPU. Parallel evaluation (``n_workers``) always applies, but
             the combinations CUDA + multiple workers will issue a warning.
         length_unit : {"angstrom", "nanometer"} or float, optional, default="nanometer"
-            Scaling factor for positional units. If a string, must be "angstrom" or "nanometer".
-            If a float, interpreted as a custom scale.
+            The unit or scaling factor for atomic coordinates and related quantities
+            (e.g., samples, scores, or forces). Internally, coordinates are represented
+            in nanometers. When a ``length_unit`` is set, the class API automatically
+            scales all inputs and outputs so that they consistently use the selected unit.
+
+            If a float is provided, it is interpreted as a custom scale :math:`L`.
+            Inputs :math:`x_{input}` are transformed to the internal nanometer
+            representation :math:`x_{nm}` via:
+
+            .. math::
+
+                x_{nm} = x_{input} \cdot L
+
+            Common unit mappings:
+
+            * ``"angstrom"``: Equivalent to :math:`L = 0.1`
+            * ``"nanometer"``: Equivalent to :math:`L = 1.0` (default)
+
         **kwargs : dict
             Additional arguments passed to the repository loader.
         """
@@ -167,6 +191,45 @@ class MolecularBoltzmann(NumPyTarget):
         cached_repo_args: dict | None = None,
         boltzmann_args: dict | None = None,
     ):
+        """
+        Alternative constructor to initialize a system directly from a PDB file.
+
+        This method creates a virtual cached repository containing the necessary
+        configuration files (``info.yaml`` and the PDB file) to instantiate a
+        :class:`MolecularBoltzmann` target without needing a pre-existing
+        repository on disk or Hugging Face.
+
+        Parameters
+        ----------
+        name : str
+            A unique identifier for the virtual repository (e.g., "my_protein").
+            It will be prefixed with ``virtual://``.
+        pdb_fpath : str
+            File path to the input PDB file containing the system topology and
+            initial coordinates.
+        forcefields : list of str or tuple of str, optional
+            A collection of OpenMM-compatible forcefield XML files. Defaults to
+            AMBER99SB-ILDN with OBC implicit solvent.
+        temperature : float, optional, default=300.0
+            The simulation temperature in Kelvin.
+        cached_repo_args : dict, optional
+            Additional keyword arguments passed to the ``create_cached_repo``
+            utility.
+        boltzmann_args : dict, optional
+            Additional keyword arguments passed to the :class:`MolecularBoltzmann`
+            constructor (e.g., ``length_unit``, ``n_workers``).
+
+        Returns
+        -------
+        MolecularBoltzmann
+            An initialized instance of the class configured with the provided
+            PDB and forcefield settings.
+
+        Raises
+        ------
+        ValueError
+            If ``pdb_fpath`` does not point to a valid existing file.
+        """
         if not os.path.exists(pdb_fpath) and os.path.isfile(pdb_fpath):
             raise ValueError(
                 f"The given 'pdb_fpath' string is not pointing to a file: '{pdb_fpath}'"
@@ -274,12 +337,36 @@ class MolecularBoltzmann(NumPyTarget):
         return pdb, system
 
     def get_openmm_topology(self):
+        """
+        Return the OpenMM topology object.
+
+        Returns
+        -------
+        openmm.app.Topology
+            System topology defining the system.
+        """
         return self._pdb.topology
 
     def get_openmm_system(self):
+        """
+        Return the OpenMM system object.
+
+        Returns
+        -------
+        openmm.System
+            Fully constructed OpenMM system.
+        """
         return self._system
 
     def get_mdtraj_topology(self):
+        """
+        Return the topology converted into MDTraj format.
+
+        Returns
+        -------
+        mdtraj.Topology
+            MDTraj-compatible topology.
+        """
         return md.Topology.from_openmm(self.get_openmm_topology())
 
     def _init_energy_eval(self, n_workers: int | None):
@@ -298,7 +385,18 @@ class MolecularBoltzmann(NumPyTarget):
             raise TypeError
 
     @property
-    def energy_eval(self):
+    def energy_eval(self) -> SequentialEnergyEval | ParallelEnergyEval | None:
+        """
+        Lazy-initialized energy and force evaluation backend.
+
+        The evaluator is created on first access based on the configured
+        number of workers and OpenMM platform.
+
+        Returns
+        -------
+        SequentialEnergyEval or ParallelEnergyEval or None
+            Energy evaluation backend used for OpenMM computations.
+        """
         if self._energy_eval is None:
             self._init_energy_eval(self._n_workers)
         return self._energy_eval
@@ -319,7 +417,27 @@ class MolecularBoltzmann(NumPyTarget):
 
     def get_energy_and_forces(
         self, x: np.ndarray, include_energy: bool = True, include_forces: bool = True
-    ):
+    ) -> tuple[np.ndarray | None, np.ndarray | None]:
+        """
+        Compute energy and forces for a batch of configurations.
+
+        Coordinates are internally scaled to nanometers before evaluation
+        assuming the length-scale specified in the constructor for the input conformations.
+
+        Parameters
+        ----------
+        x : np.ndarray
+            Input coordinates.
+        include_energy : bool, optional
+            Whether to compute energies.
+        include_forces : bool, optional
+            Whether to compute forces.
+
+        Returns
+        -------
+        tuple[np.ndarray | None, np.ndarray | None]
+            Energy and forces (or None if disabled).
+        """
         x_nm = x * self._length_scale
         energy, forces_nm = self.energy_eval.evaluate_batch(
             x_nm, include_energy=include_energy, include_forces=include_forces
@@ -352,12 +470,26 @@ class MolecularBoltzmann(NumPyTarget):
         scores = self._forces_to_score(forces)
         return scores
 
-    def get_z_matrix(self, allow_autogen=True) -> list[tuple[int, int, int, int]]:
+    def get_z_matrix(self, allow_autogen=True) -> tuple[tuple[int, int, int, int]]:
         """
-        Generate or get a z-matrix for this system.
+        Get or generate a z-matrix for the molecular system.
 
-        :param allow_autogen: Whether to automatically generate a z-matrix if none is specifed in the system config.
-        :type allow_autogen: bool
+        If not explicitly provided, a z-matrix can be automatically generated.
+
+        Parameters
+        ----------
+        allow_autogen : bool, default=True
+            If True, generate a z-matrix when missing.
+
+        Returns
+        -------
+        tuple[tuple[int, int, int, int]]
+            Z-matrix atom index relations.
+
+        Raises
+        ------
+        ValueError
+            If no z-matrix exists and autogeneration is disabled.
         """
         z_matrix: None | list[tuple[int, int, int, int]] = self._repo.config.get(
             "z_matrix", None
@@ -375,7 +507,7 @@ class MolecularBoltzmann(NumPyTarget):
                 "System has no pre-specified z-matrix and `autogen` is set to False"
             )
 
-        return z_matrix
+        return tuple(z_matrix)
 
     def _compute_position_min_energy(self):
         integrator = mm.VerletIntegrator(1.0 * unit.femtoseconds)
@@ -389,7 +521,34 @@ class MolecularBoltzmann(NumPyTarget):
         minimized_positions = vec3_list_to_numpy(minimized_positions)
         return minimized_positions.reshape((self.dim,))
 
-    def get_position_min_energy(self) -> np.ndarray:
+    def get_position_min_energy(self, allow_autogen: bool = True) -> np.ndarray:
+        """
+        Retrieve the minimum-energy configuration of the system.
+
+        The position is resolved in the following order:
+        1. In-memory cache (if available),
+        2. Repository file (``position_min_energy``),
+        3. Automatic OpenMM energy minimization (if allowed).
+
+        The returned coordinates are converted to the user-defined length unit.
+
+        Parameters
+        ----------
+        allow_autogen : bool, default=True
+            If True, compute the minimum-energy structure using OpenMM if it
+            is not available in cache or repository.
+
+        Returns
+        -------
+        np.ndarray
+            Minimum-energy coordinates in user length units.
+
+        Raises
+        ------
+        ValueError
+            If the minimum-energy configuration is not available and
+            ``allow_autogen=False``.
+        """
         pos_nm = None
         if self._pos_min_energy_cache is not None:
             pos_nm = self._pos_min_energy_cache
@@ -401,7 +560,7 @@ class MolecularBoltzmann(NumPyTarget):
                 self._pos_min_energy_cache = pos_min_energy.reshape((self.dim,))
                 pos_nm = self._pos_min_energy_cache
 
-        if pos_nm is None:
+        if pos_nm is None and allow_autogen:
             import warnings
 
             warnings.warn(
@@ -411,9 +570,35 @@ class MolecularBoltzmann(NumPyTarget):
             pos_nm = self._compute_position_min_energy()
             self._pos_min_energy_cache = pos_nm
 
-        return pos_nm / self._length_scale
+        if pos_nm is not None:
+            pos = pos_nm / self._length_scale
+        else:
+            raise ValueError(
+                "Minimum-energy position could not be determined.\n"
+                "No cached value was found, and the repository does not provide a "
+                "'position_min_energy' entry.\n"
+                "Automatic computation is disabled (allow_autogen=False), so the "
+                "minimum-energy structure cannot be generated.\n\n"
+                "To fix this, either:\n"
+                "  - set allow_autogen=True to compute it via OpenMM minimization, or\n"
+                "  - provide 'position_min_energy' in the repository config."
+            )
+        return pos
 
     def get_tica_model(self):
+        """
+        Load the TICA model associated with the system.
+
+        Returns
+        -------
+        TicaModelWithLengthScale
+            Fitted TICA model with consistent length scaling.
+
+        Raises
+        ------
+        ValueError
+            If no unique TICA file is found in the repository.
+        """
         tica_key = "tica"
         tica_remote_path = self._repo.config.get(tica_key, None)
         if tica_remote_path is None:
@@ -432,10 +617,26 @@ class MolecularBoltzmann(NumPyTarget):
 
     @property
     def spatial_dim(self) -> int:
+        """
+        Spatial dimensionality of the system.
+
+        Returns
+        -------
+        int
+            Number of spatial dimensions per atom (typically 3).
+        """
         return self._spatial_dim
 
     @property
     def n_atoms(self) -> int:
+        """
+        Number of atoms in the molecular system.
+
+        Returns
+        -------
+        int
+            Total number of atoms in the system.
+        """
         return self._n_nodes
 
     def can_sample(self):
@@ -464,6 +665,25 @@ class MolecularBoltzmann(NumPyTarget):
         energies and forces. It supports loading
         precomputed data, retrieving cached values, and automatically
         generating missing quantities (energies or forces) on demand.
+
+        It is recommended to cache energies and forces when they are computed on demand to avoid repeated expensive OpenMM evaluations.
+
+        Cached values are only used if both conditions are satisfied:
+         - the corresponding ``include_energies`` / ``include_forces`` flag is set to ``True``, and
+         - the corresponding ``cache_energies`` / ``cache_forces`` flag is also set to ``True``.
+
+        Otherwise, cached values are ignored.
+
+        Example:
+
+        .. code-block:: python
+
+            load_dataset(..., include_energies=True, cache_energies=False)
+            # → energies are NOT loaded from cache
+
+            load_dataset(..., include_energies=True, cache_energies=True)
+            # → energies ARE loaded from cache (if available)
+
 
         Parameters
         ----------

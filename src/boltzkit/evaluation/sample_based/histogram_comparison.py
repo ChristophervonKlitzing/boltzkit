@@ -10,24 +10,13 @@ T = TypeVar("T", Histogram1D, Histogram2D)
 
 class HistogramMetric(Protocol):
     """
-    Protocol for histogram distance/divergence metrics.
+    Protocol for histogram distance or divergence metrics.
 
-    A histogram metric is a callable that takes two histograms of the same
-    dimensionality and binning and returns a scalar value describing the
-    difference between them.
+    A histogram metric is a callable object that compares two histograms
+    with identical binning and returns a scalar score.
 
-    Implementations must also provide an ``id`` property that uniquely
-    identifies the metric (used for logging and aggregation).
-
-    Methods
-    -------
-    __call__(hist_p, hist_q) -> float
-        Compute the metric between two histograms.
-
-    Properties
-    ----------
-    id : str
-        Short identifier for the metric (e.g., "kl", "tv").
+    Implementations must also define an ``id`` property used for logging
+    and aggregation.
     """
 
     def __call__(self, hist_p: T, hist_q: T) -> float:
@@ -42,33 +31,32 @@ def get_histogram_fwd_kullback_leibler(hist_p: T, hist_q: T):
     """
     Compute the forward Kullback-Leibler divergence between two histograms.
 
-    The divergence is computed as
+    The divergence is defined as:
 
-        KL(P || Q) = ∫ P(x) log(P(x) / Q(x)) dx
+    .. math::
 
-    using the density representation of the histograms and approximating
-    the integral via a discrete sum over bins.
+        KL(P \\parallel Q) = \\int P(x) \\log \\frac{P(x)}{Q(x)} dx
 
-    A small epsilon (1e-10) is added to both densities to avoid numerical issues
-    when taking the logarithm.
+    and approximated using a discrete sum over histogram bins.
+
+    A small constant is added for numerical stability.
 
     Parameters
     ----------
     hist_p : Histogram1D or Histogram2D
-        Reference histogram representing distribution P.
+        Reference distribution :math:`P`.
     hist_q : Histogram1D or Histogram2D
-        Comparison histogram representing distribution Q.
-        Must have the same number of bins as ``hist_p``.
+        Approximation distribution :math:`Q`. Must share identical binning.
 
     Returns
     -------
     float
-        The forward Kullback-Leibler divergence KL(P || Q).
+        Estimated KL divergence :math:`KL(P \\parallel Q)`.
 
     Notes
     -----
-    - Both histograms must have identical binning.
-    - The bin area is used to correctly approximate the continuous integral.
+    - Histograms must have identical bin structure.
+    - The bin area is used to approximate the continuous integral.
     """
     assert hist_p.get_num_bins() == hist_q.get_num_bins()
 
@@ -93,29 +81,30 @@ def get_histogram_total_variation_distance(hist_p: T, hist_q: T):
     """
     Compute the total variation distance between two histograms.
 
-    The total variation distance between two probability densities is
+    Defined as:
 
-        TV(P, Q) = 1/2 ∫ |P(x) - Q(x)| dx
+    .. math::
 
-    The integral is approximated via a discrete sum over the histogram bins.
+        TV(P, Q) = \\frac{1}{2} \\int |P(x) - Q(x)| dx
+
+    Approximated via summation over histogram bins.
 
     Parameters
     ----------
     hist_p : Histogram1D or Histogram2D
-        First histogram representing distribution P.
+        First distribution :math:`P`.
     hist_q : Histogram1D or Histogram2D
-        Second histogram representing distribution Q.
-        Must have the same number of bins as ``hist_p``.
+        Second distribution :math:`Q`. Must share identical binning.
 
     Returns
     -------
     float
-        The total variation distance between the two distributions.
+        Total variation distance in :math:`[0, 1]`.
 
     Notes
     -----
-    - Both histograms must have identical binning.
-    - The bin area is used to properly approximate the integral.
+    - Requires identical binning.
+    - Uses bin area for continuous approximation.
     """
     assert hist_p.get_num_bins() == hist_q.get_num_bins()
 
@@ -137,37 +126,34 @@ def get_histogram_jensen_shannon_divergence(hist_p: T, hist_q: T):
     """
     Compute the Jensen-Shannon divergence between two histograms.
 
-    The Jensen-Shannon divergence is defined as
+    Defined as:
 
-        JSD(P, Q) = 1/2 KL(P || M) + 1/2 KL(Q || M)
+    .. math::
 
-    where
+        JSD(P, Q) = \\frac{1}{2} KL(P \\parallel M) + \\frac{1}{2} KL(Q \\parallel M)
 
-        M = 1/2 (P + Q)
+    where:
 
-    is the mixture distribution.
+    .. math::
 
-    The integral is approximated via a discrete sum over the histogram bins
-    using the density representation of the histograms.
+        M = \\frac{1}{2}(P + Q)
 
     Parameters
     ----------
     hist_p : Histogram1D or Histogram2D
-        First histogram representing distribution P.
+        First distribution :math:`P`.
     hist_q : Histogram1D or Histogram2D
-        Second histogram representing distribution Q.
-        Must have the same number of bins as ``hist_p``.
+        Second distribution :math:`Q`. Must share identical binning.
 
     Returns
     -------
     float
-        The Jensen-Shannon divergence between the two distributions.
+        Jensen-Shannon divergence (non-negative, symmetric).
 
     Notes
     -----
-    - Both histograms must have identical binning.
-    - The bin area is used to properly approximate the integral.
-    - A small epsilon is added to avoid log(0).
+    - Histograms must have identical binning.
+    - A small epsilon is used for numerical stability.
     """
     assert hist_p.get_num_bins() == hist_q.get_num_bins()
 
@@ -209,60 +195,51 @@ def get_histogram_metrics(
     include_aggregated: bool = True,
 ):
     """
-    Evaluate multiple histogram metrics for pairs of histograms.
+    Evaluate multiple histogram metrics on paired histograms.
 
-    Each metric is computed for corresponding pairs of histograms from
-    ``true`` and ``pred``. Results are returned in a flat dictionary with
-    keys encoding the group, histogram-type, metric identifier, and histogram index.
+    Each metric is applied to corresponding pairs from ``true`` and ``pred``.
+    Results are returned as a flat dictionary with structured keys.
 
-    Additionally, the mean value of each metric across all histogram pairs
-    is computed and stored.
+    Keys follow the format:
+
+    .. code-block:: text
+
+        {group}/{h_type}_{metric_id}_{i}
+        {group}/{metric_id}_{i}          (if h_type is None)
+
+    Aggregated statistics (mean over histogram pairs) are optionally included:
+
+    .. code-block:: text
+
+        {group}/{h_type}_{metric_id}_mean
+        {group}/{metric_id}_mean
 
     Parameters
     ----------
-    hist_metrics : list of HistogramMetric
-        Metrics to evaluate on each histogram pair.
-    true : list of Histogram1D or Histogram2D
-        List of reference ("ground truth") histograms.
-    pred : list of Histogram1D or Histogram2D
-        List of predicted histograms corresponding to ``true``.
+    hist_metrics : list[HistogramMetric]
+        Metrics to evaluate.
+    true : list[Histogram1D or Histogram2D]
+        Ground-truth histograms.
+    pred : list[Histogram1D or Histogram2D]
+        Predicted histograms (same length as ``true``).
     group : str
-        Name of the metric group (e.g., `torsion_marginal`).
-    h_type : str
-        Descriptor for the histogram type (e.g., "phi_psi" (2D), "phi" (1D)).
+        Metric group name (e.g., ``"torsion"``).
+    h_type : str, optional
+        Histogram type identifier (e.g., ``"phi_psi"``).
     include_individual : bool, default=True
-        Whether to include metric values for each individual histogram pair.
+        Whether to include per-histogram metric values.
     include_aggregated : bool, default=True
-        Whether to include aggregated metrics across all histogram pairs
-        (currently the mean for each metric).
+        Whether to include mean values across histogram pairs.
 
     Returns
     -------
     dict[str, float]
-        Dictionary mapping metric names to computed values.
-
-        Individual metric entries follow the format::
-
-            "{group}/{h_type}_{metric_id}_{i}"
-
-            or
-
-            "{group}/{metric_id}_{i}" if `h_type` is `None`
-
-        where ``i`` is the histogram index.
-
-        Mean values across all histogram pairs are stored as::
-
-            "{group}/{h_type}_{metric_id}_mean"
-
-            or
-
-            "{group}/{metric_id}_{i}" if `h_type` is `None`
+        Dictionary of computed metrics.
 
     Notes
     -----
-    - ``true`` and ``pred`` must contain the same number of histograms.
-    - Histogram pairs are evaluated in order using ``zip(true, pred)``.
+    - ``true`` and ``pred`` must have equal length.
+    - Metrics are evaluated pairwise using ``zip``.
     """
 
     assert include_aggregated or include_individual

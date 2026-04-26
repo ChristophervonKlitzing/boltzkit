@@ -7,20 +7,23 @@ def get_elbo(log_weights: np.ndarray) -> float:
     """
     Compute the Evidence Lower Bound (ELBO) using samples from q(x).
 
-    The ELBO is defined as:
-        ELBO = E_q[log p(x) - log q(x)]
+    For :math:`x \\sim q(x)`,
+
+    .. math::
+
+        \\log w(x) = \\log \\tilde{p}(x) - \\log q(x), \\quad
+        \\mathrm{ELBO} = \\mathbb{E}_q[\\log w].
 
     Parameters
     ----------
     log_weights : np.ndarray
-        Log weights of shape (batch,) or (batch, 1):
-        log p(x) - log q(x), with samples x ~ q(x).
-        The target log-density p(x) may be unnormalized.
+        Log weights, i.e.,
+        :math:`\\log \\tilde{p}(x) - \\log q(x)` for samples :math:`x \\sim q(x)`.
 
     Returns
     -------
     float
-        Monte Carlo estimate of the ELBO.
+        Estimate of the ELBO.
     """
     log_weights = squeeze_last_dim(log_weights)
     return float(log_weights.mean())
@@ -30,15 +33,18 @@ def get_eubo(log_weights: np.ndarray) -> float:
     """
     Compute the Evidence Upper Bound (EUBO) using samples from p(x).
 
-    Defined as:
-        EUBO = E_p[log p(x) - log q(x)]
+    For :math:`x \\sim p(x)`,
+
+    .. math::
+
+        \\log w(x) = \\log \\tilde{p}(x) - \\log q(x), \\quad
+        \\mathrm{EUBO} = \\mathbb{E}_p[\\log w].
 
     Parameters
     ----------
     log_weights : np.ndarray
-        Log weights of shape (batch,) or (batch, 1):
-        log p(x) - log q(x), with samples x ~ p(x).
-        The target log-density p(x) may be unnormalized.
+        Log weights, i.e.,
+        :math:`\\log \\tilde{p}(x) - \\log q(x)` for samples :math:`x \\sim p(x)`.
 
     Returns
     -------
@@ -51,15 +57,18 @@ def get_eubo(log_weights: np.ndarray) -> float:
 
 def get_nll(model_log_prob: np.ndarray) -> float:
     """
-    Compute the negative log-likelihood under the model q(x).
+    Compute the negative log-likelihood under q(x) using samples from p(x).
 
-    Defined as:
-        NLL = -E_p[q(x)]
+    For :math:`x \\sim p(x)`,
+
+    .. math::
+
+        \\mathrm{NLL} = -\\mathbb{E}_p[\\log q(x)].
 
     Parameters
     ----------
     model_log_prob : np.ndarray
-        Log-probabilities log q(x) evaluated at samples x ~ p(x).
+        Log-probabilities :math:`\\log q(x)` evaluated at samples :math:`x \\sim p(x)`.
 
     Returns
     -------
