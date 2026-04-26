@@ -1,9 +1,21 @@
-Targets
-============
+Target systems
+==============
 
+Overview
+--------
 
-Available target distributions:
+All target systems implement the following interface:
 
+- ``get_log_prob``
+- ``get_score``
+- ``get_log_prob_and_score``
 
-- :class:`boltzkit.targets.DiagonalGaussianMixture`
-- :class:`boltzkit.targets.MolecularBoltzmann`
+These methods accept (batched) inputs as NumPy arrays, JAX arrays, or PyTorch tensors and return outputs in the corresponding framework format.
+
+Each target defines which operations are supported and which backend frameworks are available.
+
+Available targets
+------------------
+
+- :doc:`targets/molecular_boltzmann`
+- :doc:`targets/gaussian_mixture`
