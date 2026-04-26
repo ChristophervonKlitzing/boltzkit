@@ -16,7 +16,7 @@ Data conventions
 - Model density evaluations (``model_log_prob``) must be normalized and have shape ``(batch,)``.
 
 Building and running an evaluation pipeline
--------------------------------
+----------------------------------------------
 
 Evaluation is performed by composing a list of modular evaluators.
 

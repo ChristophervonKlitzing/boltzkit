@@ -31,7 +31,7 @@ class DiagonalGaussianMixture(DispatchedTarget):
         logits: np.ndarray,
     ):
         """
-            Initialize a diagonal-covariance Gaussian mixture model.
+        Initialize a diagonal-covariance Gaussian mixture model.
 
                 Parameters
         ----------
@@ -332,7 +332,9 @@ class DiagonalGaussianMixture(DispatchedTarget):
         from boltzkit.targets.gaussian_mixture._jax_mog import (
             create_jax_MoG_eval,
         )
-        from boltzkit.targets._jax import make_eval_from_jax_log_prob_single
+        from boltzkit.targets.base.dispatched_eval.jax import (
+            make_eval_from_jax_log_prob_single,
+        )
 
         return make_eval_from_jax_log_prob_single(
             create_jax_MoG_eval(self._means, self._scales, self._logits)

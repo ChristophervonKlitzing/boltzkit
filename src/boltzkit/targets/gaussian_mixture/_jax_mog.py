@@ -1,6 +1,6 @@
 import jax
 import jax.numpy as jnp
-from boltzkit.targets._jax import make_eval_from_jax_log_prob_single
+from boltzkit.targets.base.dispatched_eval.jax import make_eval_from_jax_log_prob_single
 
 
 def create_jax_MoG_eval(means: jnp.ndarray, scales: jnp.ndarray, logits: jnp.ndarray):

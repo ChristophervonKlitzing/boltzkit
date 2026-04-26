@@ -64,7 +64,7 @@ All components share the same standard deviation:
    )
 
 Uniform isotropic mixture (e.g., GMM40)
-~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Means are sampled uniformly in a range and weights are equal:
 

@@ -4,6 +4,10 @@ import jax
 
 
 class JaxEval(NamedTuple):
+    """
+    awd
+    """
+
     get_log_prob: Callable[[jax.Array], jax.Array]
     get_score: Callable[[jax.Array], jax.Array]
     get_log_prob_and_score: Callable[[jax.Array], tuple[jax.Array, jax.Array]]

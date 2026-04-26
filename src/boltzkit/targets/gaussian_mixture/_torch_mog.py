@@ -1,6 +1,6 @@
 import numpy as np
 import torch
-from boltzkit.targets._torch import TorchEval
+from boltzkit.targets.base.dispatched_eval.torch import TorchEval
 
 
 class TorchMoG(TorchEval):
