@@ -225,8 +225,8 @@ class DiagonalGaussianMixture(DispatchedTarget):
         length: int,
         *,
         include_samples: bool = True,
-        include_energies: bool = False,
-        include_forces: bool = False,
+        include_log_probs: bool = False,
+        include_scores: bool = False,
         seed: int = 0,
     ) -> Dataset:
         """
@@ -304,11 +304,11 @@ class DiagonalGaussianMixture(DispatchedTarget):
 
         samples = chosen_means + chosen_scales * eps
 
-        if include_energies:
+        if include_log_probs:
             log_probs = self.get_log_prob(samples)
         else:
             log_probs = None
-        if include_forces:
+        if include_scores:
             scores = self.get_score(samples)
         else:
             scores = None
@@ -368,7 +368,7 @@ if __name__ == "__main__":
     target = DiagonalGaussianMixture(means, diag_stds, logits)
     target = DiagonalGaussianMixture.create_gmm40()
 
-    d1 = target.load_dataset(type="val", length=5, include_energies=True)
+    d1 = target.load_dataset(type="val", length=5, include_log_probs=True)
     d2 = target.load_dataset(type="val", length=10)
 
     print(d1.get_samples())

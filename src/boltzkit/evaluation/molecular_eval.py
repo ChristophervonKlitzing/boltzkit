@@ -469,7 +469,7 @@ if __name__ == "__main__":
     z_matrix = bm.get_z_matrix()
 
     val_dataset = bm.load_dataset(
-        T=300.0, type="val", length=10_000, include_energies=True
+        T=300.0, type="val", length=10_000, include_log_probs=True
     )
     val_samples = val_dataset.get_samples()
     print("loaded dataset size:", val_samples.shape)
@@ -478,7 +478,7 @@ if __name__ == "__main__":
     true_samples = true_samples.reshape(true_samples.shape[0], -1)
 
     test_dataset = bm.load_dataset(
-        T=300.0, type="test", length=10_000, include_energies=True
+        T=300.0, type="test", length=10_000, include_log_probs=True
     )
     pred_samples = test_dataset.get_samples()
     pred_samples = pred_samples.reshape(pred_samples.shape[0], -1)

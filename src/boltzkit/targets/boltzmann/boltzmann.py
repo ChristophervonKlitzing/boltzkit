@@ -650,11 +650,11 @@ class MolecularBoltzmann(NumPyTarget):
         T: float | int | None = None,
         #
         include_samples: bool = True,
-        include_energies: bool = False,
-        include_forces: bool = False,
+        include_log_probs: bool = False,
+        include_scores: bool = False,
         #
-        cache_energies: bool = True,
-        cache_forces: bool = False,
+        cache_log_probs: bool = True,
+        cache_scores: bool = False,
         #
         allow_autogen: bool = True,
     ) -> Dataset:
@@ -669,8 +669,8 @@ class MolecularBoltzmann(NumPyTarget):
         It is recommended to cache energies and forces when they are computed on demand to avoid repeated expensive OpenMM evaluations.
 
         Cached values are only used if both conditions are satisfied:
-         - the corresponding ``include_energies`` / ``include_forces`` flag is set to ``True``, and
-         - the corresponding ``cache_energies`` / ``cache_forces`` flag is also set to ``True``.
+         - the corresponding ``include_log_probs`` / ``include_scores`` flag is set to ``True``, and
+         - the corresponding ``cache_log_probs`` / ``cache_scores`` flag is also set to ``True``.
 
         Otherwise, cached values are ignored.
 
@@ -678,10 +678,10 @@ class MolecularBoltzmann(NumPyTarget):
 
         .. code-block:: python
 
-            load_dataset(..., include_energies=True, cache_energies=False)
+            load_dataset(..., include_log_probs=True, cache_log_probs=False)
             # → energies are NOT loaded from cache
 
-            load_dataset(..., include_energies=True, cache_energies=True)
+            load_dataset(..., include_log_probs=True, cache_log_probs=True)
             # → energies ARE loaded from cache (if available)
 
 
@@ -695,13 +695,13 @@ class MolecularBoltzmann(NumPyTarget):
             Temperature (in Kelvin) identifying the dataset. Integers are cast to float. If None, the target's temperature is used.
         include_samples : bool, default=True
             Whether to return samples.
-        include_energies : bool, default=False
+        include_log_probs : bool, default=False
             Whether to include energy values for each sample. Fails if no energies are available and `allow_autogen` is False.
-        include_forces : bool, default=False
+        include_scores : bool, default=False
             Whether to include force values for each sample. Fails if no forces are available and `allow_autogen` is False.
-        cache_energies : bool, default=True
+        cache_log_probs : bool, default=True
             Whether to use cached and/or cache computed energies locally when they are generated. Requires `allow_autogen` to be True.
-        cache_forces : bool, default=False
+        cache_scores : bool, default=False
             Whether to use cached and/or cache computed forces locally when they are generated. Requires `allow_autogen` to be True.
         allow_autogen : bool, default=True
             If True, missing energies or forces are computed on demand. Without caching being enabled,
@@ -760,11 +760,11 @@ class MolecularBoltzmann(NumPyTarget):
             samples,
             dset_cfg=dset_cfg,
             autogen=allow_autogen,
-            include_energies=include_energies,
-            include_forces=include_forces,
+            include_energies=include_log_probs,
+            include_forces=include_scores,
             cache_prefix=cache_prefix,
-            cache_energies=cache_energies,
-            cache_forces=cache_forces,
+            cache_energies=cache_log_probs,
+            cache_forces=cache_scores,
         )
 
         if not include_samples:
@@ -850,7 +850,7 @@ class MolecularBoltzmann(NumPyTarget):
                 samples,
                 energies,
                 forces,
-                include_energies=include_energies,
+                include_log_probs=include_energies,
                 include_forces=include_forces,
             )
 
@@ -874,14 +874,14 @@ class MolecularBoltzmann(NumPyTarget):
         samples: np.ndarray,
         energies: np.ndarray | None,
         forces: np.ndarray | None,
-        include_energies: bool,
+        include_log_probs: bool,
         include_forces: bool,
     ):
         n_samples = samples.shape[0]
         n_energies = 0 if energies is None else energies.shape[0]
         n_forces = 0 if forces is None else forces.shape[0]
 
-        require_energies = include_energies and n_energies < n_samples
+        require_energies = include_log_probs and n_energies < n_samples
         require_forces = include_forces and n_forces < n_samples
 
         # If there is a mismatch between n_energies and n_forces, first compute the
@@ -911,7 +911,7 @@ class MolecularBoltzmann(NumPyTarget):
                 n_forces += forces_gap.shape[0]
 
         # Re-compute flags with updated energy/force count
-        require_energies = include_energies and n_energies < n_samples
+        require_energies = include_log_probs and n_energies < n_samples
         require_forces = include_forces and n_forces < n_samples
 
         if require_energies and require_forces:

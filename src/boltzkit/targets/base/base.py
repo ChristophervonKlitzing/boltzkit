@@ -1,12 +1,13 @@
 from abc import ABC, abstractmethod
 import numpy as np
 from boltzkit.targets.base.dispatched_eval.np import NumpyEval
+from boltzkit.utils.dataset import Dataset
 from boltzkit.utils.framework import (
     make_agnostic,
     FrameworkAgnosticFunction,
     detect_framework,
 )
-from typing import TYPE_CHECKING, Callable
+from typing import TYPE_CHECKING, Callable, Literal
 
 
 if TYPE_CHECKING:
@@ -164,6 +165,48 @@ class BaseTarget(ABC):
             Value of log Z or None if unavailable.
         """
         return None
+
+    @abstractmethod
+    def load_dataset(
+        self,
+        type: Literal["train", "val", "test"],
+        length: int,
+        *,
+        include_samples: bool = True,
+        include_log_probs: bool = False,
+        include_scores: bool = False,
+    ) -> Dataset:
+        """
+        Load the dataset of the specified split.
+
+        This method retrieves samples and optionally associated
+        log_probs/energies and scores/forces.
+
+        Parameters
+        ----------
+        type : Literal["train", "val", "test"]
+            Dataset split to load.
+        length : int, optional
+            Maximum number of samples to load. If -1, all available samples are used.
+        T : float | int | None
+            Temperature (in Kelvin) identifying the dataset. Integers are cast to float. If None, the target's temperature is used.
+        include_samples : bool, default=True
+            Whether to return samples.
+        include_log_probs : bool, default=False
+            Whether to include energy values for each sample. Fails if no energies are available and `allow_autogen` is False.
+        include_scores : bool, default=False
+            Whether to include force values for each sample. Fails if no forces are available and `allow_autogen` is False.
+
+        Returns
+        -------
+        Dataset
+
+        Raises
+        ------
+        RuntimeError | NotImplementedError
+            If dataset configuration is missing or cannot be computed/retrieved
+        """
+        raise NotImplementedError
 
 
 class BackendWrappedTarget(BaseTarget):
