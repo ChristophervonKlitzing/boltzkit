@@ -1,6 +1,6 @@
 import jax
 import jax.numpy as jnp
-from boltzkit.targets.base.dispatched_eval.jax import make_eval_from_jax_log_prob_single
+from boltzkit.targets.base.dispatched_eval.jax import JaxEval
 
 
 def create_jax_MoG_eval(means: jnp.ndarray, scales: jnp.ndarray, logits: jnp.ndarray):
@@ -39,8 +39,8 @@ def create_jax_MoG_eval(means: jnp.ndarray, scales: jnp.ndarray, logits: jnp.nda
         return quad + log_norm_consts  # (K,)
 
     # Single-sample log_prob
-    def log_prob_single(x):
+    def log_prob_single(x: jax.Array):
         comp_lp = component_log_prob(x)  # (K,)
         return jax.scipy.special.logsumexp(comp_lp + log_weights)  # scalar
 
-    return make_eval_from_jax_log_prob_single(log_prob_single)
+    return JaxEval.create_from_log_prob_single(log_prob_single)

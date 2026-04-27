@@ -12,17 +12,21 @@ class JaxEval(NamedTuple):
     get_score: Callable[[jax.Array], jax.Array]
     get_log_prob_and_score: Callable[[jax.Array], tuple[jax.Array, jax.Array]]
 
+    @classmethod
+    def create_from_log_prob_single(
+        cls,
+        jax_log_prob_single: Callable[[jax.Array], jax.Array],
+    ) -> "JaxEval":
+        """
+        Expects unbatched log-prob (,) -> (,)
+        """
+        # use jit, vmap and grad
+        get_log_prob = jax.vmap(jax_log_prob_single)
+        get_score = jax.vmap(jax.grad(jax_log_prob_single))
+        get_log_prob_and_score = jax.vmap(jax.value_and_grad(jax_log_prob_single))
 
-def make_eval_from_jax_log_prob_single(
-    jax_log_prob_single: Callable[[jax.Array], jax.Array],
-) -> JaxEval:
-    # use jit, vmap and grad
-    get_log_prob = jax.vmap(jax_log_prob_single)
-    get_score = jax.vmap(jax.grad(jax_log_prob_single))
-    get_log_prob_and_score = jax.vmap(jax.value_and_grad(jax_log_prob_single))
-
-    return JaxEval(
-        get_log_prob=jax.jit(get_log_prob),
-        get_score=jax.jit(get_score),
-        get_log_prob_and_score=jax.jit(get_log_prob_and_score),
-    )
+        return JaxEval(
+            get_log_prob=jax.jit(get_log_prob),
+            get_score=jax.jit(get_score),
+            get_log_prob_and_score=jax.jit(get_log_prob_and_score),
+        )

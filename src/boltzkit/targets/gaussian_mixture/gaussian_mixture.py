@@ -332,17 +332,13 @@ class DiagonalGaussianMixture(DispatchedTarget):
         from boltzkit.targets.gaussian_mixture._jax_mog import (
             create_jax_MoG_eval,
         )
-        from boltzkit.targets.base.dispatched_eval.jax import (
-            make_eval_from_jax_log_prob_single,
-        )
 
-        return make_eval_from_jax_log_prob_single(
-            create_jax_MoG_eval(self._means, self._scales, self._logits)
-        )
+        return create_jax_MoG_eval(self._means, self._scales, self._logits)
 
 
 if __name__ == "__main__":
     import matplotlib.pyplot as plt
+    import jax
 
     # -----------------------
     # Create toy mixture
@@ -396,6 +392,11 @@ if __name__ == "__main__":
     # -----------------------
     log_probs = target.get_log_prob(grid)
     probs = np.exp(np.array(log_probs).reshape(X.shape))
+
+    log_probs_jax = target.get_score(jax.numpy.array([[1.0, 0.0], [2.1, 3.0]]))
+    log_probs_np = target.get_score(np.array([[1.0, 0.0], [2.1, 3.0]]))
+    print(log_probs_jax, type(log_probs_jax))
+    print(log_probs_np, type(log_probs_np))
 
     # -----------------------
     # Plot
