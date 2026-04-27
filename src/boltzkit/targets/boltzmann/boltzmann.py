@@ -158,9 +158,9 @@ class MolecularBoltzmann(NumPyTarget):
         self._init_openmm()
 
         self._temperature = self._repo.config.get("temperature", 300.0)
-        self._spatial_dim = 3
+        self._spatial_dims = 3
         self._n_nodes: int = self._system.getNumParticles()
-        dim = self.spatial_dim * self.n_atoms
+        dim = self.spatial_dims * self.n_atoms
         super().__init__(dim)
 
         self._n_workers = n_workers
@@ -616,7 +616,7 @@ class MolecularBoltzmann(NumPyTarget):
         return TicaModelWithLengthScale.from_path(tica_local_path, self._length_scale)
 
     @property
-    def spatial_dim(self) -> int:
+    def spatial_dims(self) -> int:
         """
         Spatial dimensionality of the system.
 
@@ -625,7 +625,7 @@ class MolecularBoltzmann(NumPyTarget):
         int
             Number of spatial dimensions per atom (typically 3).
         """
-        return self._spatial_dim
+        return self._spatial_dims
 
     @property
     def n_atoms(self) -> int:
