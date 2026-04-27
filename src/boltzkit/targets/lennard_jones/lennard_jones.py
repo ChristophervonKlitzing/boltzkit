@@ -39,19 +39,39 @@ class LennardJones(DispatchedTarget):
         )
 
     def _create_jax_eval(self):
-        raise NotImplementedError
+        from ._jax_lj import create_jax_lennard_jones_eval
+
+        return create_jax_lennard_jones_eval(
+            n_particles=self._n_particles,
+            spatial_dims=self._spatial_dims,
+            energy_factor=self._energy_factor,
+        )
 
 
 if __name__ == "__main__":
     import torch
+    import jax
+    import numpy as np
 
     torch.random.manual_seed(0)
 
     lj = LennardJones(n_particles=13)
 
-    x = torch.randn((2, lj.dim))
-    lp1 = lj.get_log_prob(x)
-    score1 = lj.get_score(x)
+    x_torch = torch.randn((1000, lj.dim))
+    lp_torch = lj.get_log_prob(x_torch)
+    score_torch = lj.get_score(x_torch)
 
-    print(lp1)
-    print(score1)
+    print(lp_torch.numpy())
+    # print(score_torch)
+
+    x_jax = jax.numpy.array(x_torch.numpy())
+    lp_jax = lj.get_log_prob(x_jax)
+    score_jax = lj.get_score(x_jax)
+    print(lp_jax)
+    # print(score_jax)
+
+    print(x_torch.dtype, x_jax.dtype)
+
+    assert np.allclose(x_torch.numpy(), x_jax)
+    assert np.allclose(lp_torch.numpy(), lp_jax, rtol=0.001)
+    assert np.allclose(score_torch.numpy(), score_jax, rtol=0.001, atol=0.1)
