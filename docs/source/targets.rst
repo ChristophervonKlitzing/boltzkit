@@ -19,3 +19,4 @@ Available targets
 
 - :doc:`targets/molecular_boltzmann`
 - :doc:`targets/gaussian_mixture`
+- :doc:`targets/lennard_jones`

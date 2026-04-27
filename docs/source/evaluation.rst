@@ -8,6 +8,11 @@ The evaluation system is modular and operates on an ``EvalData`` object. All fie
 
 Evaluation results are returned as a flat ``metrics`` dictionary. Depending on the selected modules, values may include scalars, histograms, or binary artifacts such as PDF files.
 
+The ``boltzkit`` evaluation is optimized for every step of the paper creation process:
+   - **Experiments:** Low quality visualizations can easily be logged to ``wandb`` to save memory
+   - **Review version:** High quality visualizations (PDFs) can be saved separately
+   - **Camera-ready:** Save raw data for later (custom) high-quality visualizations 
+
 Data conventions
 ----------------
 
