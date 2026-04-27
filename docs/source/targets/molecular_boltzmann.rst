@@ -7,7 +7,7 @@ TODO: The API on how to create MolecularBoltzmann targets will likely change soo
 Overview
 --------
 
-``MolecularBoltzmann`` defines a family of molecular energy-based targets representing Boltzmann distributions over molecular conformations.
+The :class:`boltzkit.targets.boltzmann.MolecularBoltzmann` class defines a family of molecular energy-based targets representing Boltzmann distributions over molecular conformations.
 
 Targets can be initialized from multiple sources:
 

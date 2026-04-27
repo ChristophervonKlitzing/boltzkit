@@ -4,7 +4,7 @@ Mixture of Gaussians
 Overview
 --------
 
-``DiagonalGaussianMixture`` defines a Gaussian mixture model (GMM) with **diagonal covariance matrices**.
+The :class:`boltzkit.targets.gaussian_mixture.DiagonalGaussianMixture` class defines a Gaussian mixture model (GMM) with **diagonal covariance matrices**.
 
 Each component is a multivariate normal distribution with independent dimensions:
 

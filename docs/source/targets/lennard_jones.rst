@@ -4,7 +4,7 @@ Lennard Jones
 Overview
 --------
 
-The ``LennardJones`` class defines a Lennard Jones potential with choosable number of particles and spatial dimensions.
+The :class:`boltzkit.targets.lennard_jones.LennardJones` class defines a Lennard Jones potential with choosable number of particles and spatial dimensions.
 
 Instantiation
 -------------
