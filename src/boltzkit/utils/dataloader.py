@@ -1,7 +1,7 @@
 from functools import lru_cache
 from pathlib import Path
 import pickle
-from typing import Literal
+from typing import Callable, Literal
 
 import numpy as np
 import openmm.app as app
@@ -195,3 +195,94 @@ def load_topology(path: str | Path):
 
     mm_top = app.PDBFile(path.as_posix()).topology
     return md.Topology.from_openmm(mm_top)
+
+
+def cache_load_sample_derived_data(
+    samples: np.ndarray,
+    data_fpath: Path | None,
+    data_cache_fpath: Path | None = None,
+    data_eval_fn: Callable[[np.ndarray], np.ndarray] | None = None,
+    allow_autogen: bool = False,
+    cache_data: bool = False,
+) -> np.ndarray:
+    """
+    Load or compute derived data for a set of samples with optional caching.
+
+    The function attempts, in order, to load data from a primary file, fall back
+    to a cache file, or generate missing data using a provided evaluation
+    function. Generated data can optionally be cached.
+
+    Logic priority:
+    1. Load from primary data_fpath if it exists.
+    2. Load from data_cache_fpath if it exists (requires cache_data to be True).
+    3. If allow_autogen is True, compute missing data using data_eval_fn .
+    4. If cache_data is True, save computed results to data_cache_fpath.
+
+    :param samples: Input samples of shape (n_samples, ...).
+    :type samples: numpy.ndarray
+    :param data_fpath: Path to the primary data file to load.
+    :type data_fpath: pathlib.Path or None
+    :param data_cache_fpath: Path to the cache file for loading/saving data.
+    :type data_cache_fpath: pathlib.Path or None
+    :param data_eval_fn: Function to compute derived data from samples.
+    :type data_eval_fn: Callable[[numpy.ndarray], numpy.ndarray] or None
+    :param allow_autogen: If True, compute missing data when not available.
+    :type allow_autogen: bool
+    :param cache_data: If True, enable loading from and saving to cache.
+    :type cache_data: bool
+
+    :returns: Array of derived data aligned with ``samples``.
+    :rtype: numpy.ndarray
+
+    :raises ValueError: If autogeneration is enabled but no evaluation function is provided.
+    :raises RuntimeError: If data cannot be loaded or generated.
+    """
+    data: np.ndarray | None = None
+    n_samples = samples.shape[0]
+
+    # 1. Try loading from primary file path
+    if data_fpath and data_fpath.exists():
+        data = np.load(data_fpath)
+
+        if data.shape[0] != n_samples:
+            raise ValueError(
+                f"Loaded data length mismatch: expected {n_samples} samples, "
+                f"but got {data.shape[0]} from '{data_fpath}'."
+            )
+
+    if cache_data and not allow_autogen:
+        raise ValueError("Cannot use caching without `auto_gen=True`")
+
+    # 2. Try loading from cache if primary file wasn't found/provided
+    if data is None and cache_data and data_cache_fpath and data_cache_fpath.exists():
+        data = np.load(data_cache_fpath)
+
+    # Trim data if it's longer than current samples
+    if data is not None and data.shape[0] > n_samples:
+        data = data[:n_samples]
+
+    # 3. Handle Autogeneration
+    if allow_autogen:
+        n_existing = 0 if data is None else data.shape[0]
+
+        if n_existing < n_samples:
+            if data_eval_fn is None:
+                raise ValueError("Autogen enabled but data_eval_fn is None.")
+
+            # Compute only the missing part
+            missing_data = data_eval_fn(samples[n_existing:])
+
+            if data is None:
+                data = missing_data
+            else:
+                data = np.concatenate([data, missing_data], axis=0)
+
+            # 4. Handle Caching of newly generated data
+            if cache_data and data_cache_fpath is not None:
+                data_cache_fpath.parent.mkdir(parents=True, exist_ok=True)
+                np.save(data_cache_fpath, data)
+
+    if data is None:
+        raise RuntimeError("Data could not be loaded from file, cache, or autogen.")
+
+    return data

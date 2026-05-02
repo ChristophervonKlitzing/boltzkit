@@ -4,6 +4,7 @@ import warnings
 
 import numpy as np
 
+from boltzkit.utils.dataloader import cache_load_sample_derived_data
 from boltzkit.utils.molecular.conversion import vec3_list_to_numpy
 
 
@@ -157,7 +158,7 @@ class MolecularBoltzmann(NumPyTarget):
 
         self._init_openmm()
 
-        self._temperature = self._repo.config.get("temperature", 300.0)
+        self._temperature: float = self._repo.config.get("temperature", 300.0)
         self._spatial_dims = 3
         self._n_nodes: int = self._system.getNumParticles()
         dim = self.spatial_dims * self.n_atoms
@@ -388,6 +389,8 @@ class MolecularBoltzmann(NumPyTarget):
     def energy_eval(self) -> SequentialEnergyEval | ParallelEnergyEval | None:
         """
         Lazy-initialized energy and force evaluation backend.
+
+        ONLY WORKS IN NANOMETERS!
 
         The evaluator is created on first access based on the configured
         number of workers and OpenMM platform.
@@ -642,6 +645,140 @@ class MolecularBoltzmann(NumPyTarget):
     def can_sample(self):
         return False
 
+    def load_dataset_old(
+        self,
+        type: Literal["train", "val", "test"],
+        length: int = -1,
+        *,
+        T: float | int | None = None,
+        #
+        include_samples: bool = True,
+        include_log_probs: bool = False,
+        include_scores: bool = False,
+        #
+        cache_log_probs: bool = True,
+        cache_scores: bool = False,
+        #
+        allow_autogen: bool = True,
+    ) -> Dataset:
+        """
+        Load a dataset for a given temperature and dataset split.
+
+        This method retrieves samples and optionally associated
+        energies and forces. It supports loading
+        precomputed data, retrieving cached values, and automatically
+        generating missing quantities (energies or forces) on demand.
+
+        It is recommended to cache energies and forces when they are computed on demand to avoid repeated expensive OpenMM evaluations.
+
+        Cached values are only used if both conditions are satisfied:
+         - the corresponding ``include_log_probs`` / ``include_scores`` flag is set to ``True``, and
+         - the corresponding ``cache_log_probs`` / ``cache_scores`` flag is also set to ``True``.
+
+        Otherwise, cached values are ignored.
+
+        Example:
+
+        .. code-block:: python
+
+            load_dataset(..., include_log_probs=True, cache_log_probs=False)
+            # → energies are NOT loaded from cache
+
+            load_dataset(..., include_log_probs=True, cache_log_probs=True)
+            # → energies ARE loaded from cache (if available)
+
+
+        Parameters
+        ----------
+        type : Literal["train", "val", "test"]
+            Dataset split to load.
+        length : int, optional
+            Maximum number of samples to load. If -1, all available samples are used.
+        T : float | int | None
+            Temperature (in Kelvin) identifying the dataset. Integers are cast to float. If None, the target's temperature is used.
+        include_samples : bool, default=True
+            Whether to return samples.
+        include_log_probs : bool, default=False
+            Whether to include energy values for each sample. Fails if no energies are available and `allow_autogen` is False.
+        include_scores : bool, default=False
+            Whether to include force values for each sample. Fails if no forces are available and `allow_autogen` is False.
+        cache_log_probs : bool, default=True
+            Whether to use cached and/or cache computed energies locally when they are generated. Requires `allow_autogen` to be True.
+        cache_scores : bool, default=False
+            Whether to use cached and/or cache computed forces locally when they are generated. Requires `allow_autogen` to be True.
+        allow_autogen : bool, default=True
+            If True, missing energies or forces are computed on demand. Without caching being enabled,
+            energies and forces will be re-computed each time this function is called.
+
+        Returns
+        -------
+        Dataset
+
+        Raises
+        ------
+        RuntimeError
+            If dataset configuration is missing or if the requested temperature
+            or dataset split is not found.
+
+        Notes
+        -----
+        - If energies or forces are missing, they may be:
+          1. Loaded from remote files if available,
+          2. Retrieved from a local cache if enabled,
+          3. Computed on demand if `allow_autogen=True`.
+        - Forces are internally scaled by `self._length_scale` when loaded and cached in nanometers.
+        """
+        datasets: dict[str, dict[str, str]] | None = self._repo.config.get(
+            "datasets", None
+        )
+        if datasets is None:
+            raise RuntimeError("Missing datasets config")
+
+        if T is None:
+            T = self._temperature
+
+        if isinstance(T, int):
+            T = float(T)
+
+        temp_cfg = datasets.get(str(T), None)
+        if temp_cfg is None:
+            available_temps = list(datasets.keys())
+            raise RuntimeError(
+                f"Missing dataset: "
+                f"Searched for temperature {T}K, but only found {available_temps}."
+            )
+
+        dset_cfg: dict[str, str] | str | None = temp_cfg.get(type, None)
+        if dset_cfg is None:
+            available_keys = list(temp_cfg.keys())
+            raise RuntimeError(
+                f"Missing dataset type for temperature {T}K. "
+                f"Searched for type '{type}', but only found {available_keys}."
+            )
+
+        if isinstance(dset_cfg, str):
+            dset_cfg = {"samples": dset_cfg}
+
+        samples = self.__load_samples(dset_cfg, T, length)
+
+        cache_prefix = f"_cached_dataset_{T}K_{type}"
+        energies, forces = self.__load_compute_energies_and_forces(
+            samples,
+            dset_cfg=dset_cfg,
+            autogen=allow_autogen,
+            include_energies=include_log_probs,
+            include_forces=include_scores,
+            cache_prefix=cache_prefix,
+            cache_energies=cache_log_probs,
+            cache_forces=cache_scores,
+        )
+
+        if not include_samples:
+            samples = None
+
+        kB_T = kB_in_eV_per_K * T
+        return Dataset(kB_T, samples=samples, energies=energies, forces=forces)
+
     def load_dataset(
         self,
         type: Literal["train", "val", "test"],
@@ -731,6 +868,9 @@ class MolecularBoltzmann(NumPyTarget):
         if datasets is None:
             raise RuntimeError("Missing datasets config")
 
+        if T is None:
+            T = self._temperature
+
         if isinstance(T, int):
             T = float(T)
 
@@ -755,17 +895,56 @@ class MolecularBoltzmann(NumPyTarget):
 
         samples = self.__load_samples(dset_cfg, T, length)
 
-        cache_prefix = f"_cached_dataset_{T}K_{type}"
-        energies, forces = self.__load_compute_energies_and_forces(
-            samples,
-            dset_cfg=dset_cfg,
-            autogen=allow_autogen,
-            include_energies=include_log_probs,
-            include_forces=include_scores,
-            cache_prefix=cache_prefix,
-            cache_energies=cache_log_probs,
-            cache_forces=cache_scores,
-        )
+        if include_log_probs or include_scores:
+            cache_prefix = f"_cached_dataset_{T}K_{type}"
+            samples_nm = samples * self._length_scale
+
+        if include_log_probs:
+            remote_energies_fpath = dset_cfg.get("energies", None)
+            energies_local_fpath = self._repo.try_load_file(remote_energies_fpath)
+            energies_cache_fpath = (
+                self._repo.local_path / f"{cache_prefix}_energies.npy"
+            )
+
+            def evaluate_energies(x_nm: np.ndarray) -> np.ndarray:
+                energies, _ = self.energy_eval.evaluate_batch(
+                    x_nm, include_energy=True, include_forces=False
+                )
+                return energies
+
+            energies = cache_load_sample_derived_data(
+                samples_nm,
+                data_fpath=energies_local_fpath,
+                data_cache_fpath=energies_cache_fpath,
+                data_eval_fn=evaluate_energies,
+                allow_autogen=allow_autogen,
+                cache_data=cache_log_probs,
+            )
+        else:
+            energies = None
+
+        if include_scores:
+            remote_forces_fpath = dset_cfg.get("forces", None)
+            forces_local_fpath = self._repo.try_load_file(remote_forces_fpath)
+            forces_cache_fpath = self._repo.local_path / f"{cache_prefix}_forces.npy"
+
+            def evaluate_forces(x_nm: np.ndarray) -> np.ndarray:
+                _, forces_nm = self.energy_eval.evaluate_batch(
+                    x_nm, include_energy=False, include_forces=True
+                )
+                return forces_nm
+
+            forces_nm = cache_load_sample_derived_data(
+                samples_nm,
+                data_fpath=forces_local_fpath,
+                data_cache_fpath=forces_cache_fpath,
+                data_eval_fn=evaluate_forces,
+                allow_autogen=allow_autogen,
+                cache_data=cache_scores,
+            )
+            forces = forces_nm * self._length_scale
+        else:
+            forces = None
 
         if not include_samples:
             samples = None
@@ -991,9 +1170,27 @@ def print_z_matrix(z_matrix: list[tuple[int, int, int, int]]):
 if __name__ == "__main__":
     target = MolecularBoltzmann(
         "datasets/chrklitz99/alanine_dipeptide",
-        length_unit="nanometer",
+        length_unit="angstrom",
         n_workers=None,
     )
+    dset_old = target.load_dataset_old(
+        "val",
+        length=2,
+        include_log_probs=True,
+        cache_log_probs=True,
+        allow_autogen=True,
+    )
+    dset_new = target.load_dataset(
+        "val",
+        length=10,
+        include_log_probs=True,
+        cache_log_probs=True,
+        allow_autogen=True,
+    )
+    print(dset_old.get_energies(), dset_new.get_energies())
+
+    exit()
+
     target = MolecularBoltzmann.create_from_pdb(
         "test_bm", "target_cache/alanine_dipeptide/topology.pdb"
     )

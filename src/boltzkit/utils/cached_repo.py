@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 from pathlib import Path
 import re
-from typing import Any, Callable, TypeAlias, Union
+from typing import Any, Callable, TypeAlias
 from huggingface_hub import HfFileSystem, hf_hub_download, snapshot_download
 import yaml
 from pathlib import PurePosixPath
@@ -58,6 +58,14 @@ class CachedRepo(ABC):
     @abstractmethod
     def load_file(self, relative_fpath: str) -> Path:
         raise NotImplementedError
+
+    def try_load_file(self, relative_fpath: str | None) -> Path | None:
+        if relative_fpath is None:
+            return None
+        try:
+            return self.load_file(relative_fpath)
+        except Exception:
+            return None
 
     @abstractmethod
     def load_all_files(self) -> None:
