@@ -38,6 +38,7 @@ def create_dataset_from_cached_repo(
     repo: CachedRepo,
     type: str,
     length,
+    kB_T: float,
     *,
     include_samples=True,
     include_log_probs=False,
@@ -86,4 +87,4 @@ def create_dataset_from_cached_repo(
     if not include_samples:
         samples = None
 
-    raise Dataset(kB_T=1.0, samples=samples, log_probs=log_probs, scores=scores)
+    raise Dataset(kB_T=kB_T, samples=samples, log_probs=log_probs, scores=scores)

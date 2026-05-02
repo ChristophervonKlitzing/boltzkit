@@ -59,6 +59,7 @@ class LennardJones(DispatchedTarget):
             self._dataset_repo,
             type=type,
             length=length,
+            kB_T=1.0,
             include_samples=include_samples,
             include_log_probs=include_log_probs,
             include_scores=include_scores,
