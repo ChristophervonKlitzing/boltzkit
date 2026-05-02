@@ -1,5 +1,10 @@
 import numpy as np
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from boltzkit.utils.cached_repo import CachedRepo
+
 
 class Dataset:
     """
@@ -306,3 +311,31 @@ class Dataset:
             forces = self._scores * self._kB_T
 
         return self.__get_sized_array(forces, length, "forces")
+
+    @classmethod
+    def create_from_cached_repo(
+        cls,
+        repo: "CachedRepo",
+        type,
+        length,
+        *,
+        include_samples=True,
+        include_log_probs=False,
+        include_scores=False,
+        allow_autogen: bool = True,
+        cache_log_probs: bool = True,
+        cache_scores: bool = False,
+    ):
+        from boltzkit.utils.dataset_helper import create_dataset_from_cached_repo
+
+        return create_dataset_from_cached_repo(
+            repo=repo,
+            type=type,
+            length=length,
+            include_samples=include_samples,
+            include_log_probs=include_log_probs,
+            include_scores=include_scores,
+            allow_autogen=allow_autogen,
+            cache_log_probs=cache_log_probs,
+            cache_scores=cache_scores,
+        )

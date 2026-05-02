@@ -5,6 +5,7 @@ import warnings
 import numpy as np
 
 from boltzkit.utils.dataloader import cache_load_sample_derived_data
+from boltzkit.utils.dataset_helper import get_dataset_config_from_cached_repo
 from boltzkit.utils.molecular.conversion import vec3_list_to_numpy
 
 
@@ -862,11 +863,6 @@ class MolecularBoltzmann(NumPyTarget):
           3. Computed on demand if `allow_autogen=True`.
         - Forces are internally scaled by `self._length_scale` when loaded and cached in nanometers.
         """
-        datasets: dict[str, dict[str, str]] | None = self._repo.config.get(
-            "datasets", None
-        )
-        if datasets is None:
-            raise RuntimeError("Missing datasets config")
 
         if T is None:
             T = self._temperature
@@ -874,24 +870,7 @@ class MolecularBoltzmann(NumPyTarget):
         if isinstance(T, int):
             T = float(T)
 
-        temp_cfg = datasets.get(str(T), None)
-        if temp_cfg is None:
-            available_temps = list(datasets.keys())
-            raise RuntimeError(
-                f"Missing dataset: "
-                f"Searched for temperature {T}K, but only found {available_temps}."
-            )
-
-        dset_cfg: dict[str, str] | str | None = temp_cfg.get(type, None)
-        if dset_cfg is None:
-            available_keys = list(temp_cfg.keys())
-            raise RuntimeError(
-                f"Missing dataset type for temperature {T}K. "
-                f"Searched for type '{type}', but only found {available_keys}."
-            )
-
-        if isinstance(dset_cfg, str):
-            dset_cfg = {"samples": dset_cfg}
+        dset_cfg = get_dataset_config_from_cached_repo(self._repo, type=type, T=T)
 
         samples = self.__load_samples(dset_cfg, T, length)
 
