@@ -16,6 +16,9 @@ Full documentation (installation, tutorials, and API reference):
 
 👉 https://christophervonklitzing.github.io/boltzkit/
 
+**WARNING (TODO):** boltzkit is currently not in the state where targets should be added. A smaller refactoring is needed before that
+to split density evaluation, sampling, properties like the presennce of a log normalization constant, loading of datasets etc into separate interface classes. A target should no longer be an explicit base-class but rather a composition of interfaces like `AdmitsDensity`, `HasDataset`, `HasKnownNormalizer`, `AdmitsSampling`. To check functionality, use `isinstance(target, AdmitsSampling)` instead of methods like `target.can_sample()`. To document these properties, a table should be created in the documentation. Certain interfaces can also have deriving implementations such as `HasCachedRepoDataset` to easily allow for pre-implemented routines.
+
 
 # TODOs
 - Chirality filtering
