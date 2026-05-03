@@ -318,7 +318,7 @@ class NumPyTarget(BackendWrappedTarget):
     interface via `make_agnostic`.
     """
 
-    def __init__(self, dim):
+    def __init__(self, dim: int):
         super().__init__(dim)
         self._agnostic_impl = make_agnostic(
             implementation="numpy",

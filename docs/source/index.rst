@@ -18,5 +18,6 @@ Welcome to the documentation for **boltzkit**.
    installation
    targets
    evaluation
+   contribute
    api/index
 
