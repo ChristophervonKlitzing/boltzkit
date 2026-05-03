@@ -9,7 +9,6 @@ from boltzkit.utils.framework import (
 )
 from typing import TYPE_CHECKING, Callable, Literal
 
-
 if TYPE_CHECKING:
     from boltzkit.targets.base.dispatched_eval.torch import TorchEval
     from boltzkit.targets.base.dispatched_eval.jax import JaxEval
