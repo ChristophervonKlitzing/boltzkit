@@ -66,6 +66,8 @@ class LennardJones(DispatchedTarget):
             allow_autogen=allow_autogen,
             cache_log_probs=cache_log_probs,
             cache_scores=cache_scores,
+            log_prob_fn=self.get_log_prob,
+            score_fn=self.get_score,
         )
 
     def _create_numpy_eval(self):

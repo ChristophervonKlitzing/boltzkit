@@ -1,6 +1,6 @@
 import numpy as np
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Callable
 
 if TYPE_CHECKING:
     from boltzkit.utils.cached_repo import CachedRepo
@@ -319,13 +319,14 @@ class Dataset:
         type,
         length,
         kB_T: float,
-        *,
-        include_samples=True,
-        include_log_probs=False,
-        include_scores=False,
-        allow_autogen: bool = True,
-        cache_log_probs: bool = True,
-        cache_scores: bool = False,
+        include_samples: bool,
+        include_log_probs: bool,
+        include_scores: bool,
+        allow_autogen: bool,
+        cache_log_probs: bool,
+        cache_scores: bool,
+        log_prob_fn: Callable[[np.ndarray], np.ndarray] | None,
+        score_fn: Callable[[np.ndarray], np.ndarray] | None,
     ):
         from boltzkit.utils.dataset_helper import create_dataset_from_cached_repo
 
@@ -340,4 +341,6 @@ class Dataset:
             allow_autogen=allow_autogen,
             cache_log_probs=cache_log_probs,
             cache_scores=cache_scores,
+            log_prob_fn=log_prob_fn,
+            score_fn=score_fn,
         )
