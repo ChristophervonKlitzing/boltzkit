@@ -65,3 +65,30 @@ Inside the cloned package, all dependencies can be installed using the extra ``-
 .. code-block:: bash
 
    pip install -e .[dev] --extra-index-url https://download.pytorch.org/whl/cpu
+
+
+
+Testing
+~~~~~~~
+
+Ensure the dev requirements are installed.
+
+Running unit tests
+^^^^^^^^^^^^^^^^^^^
+
+To run all unit tests, inside the boltzkit repo run:
+
+.. code-block:: bash
+
+   python -m unittest
+
+Alternatively, specific unit tests can be executed with:
+
+.. code-block:: bash
+
+   python -m unittest tests.demo
+
+Creating unit tests
+^^^^^^^^^^^^^^^^^^^
+
+Test files need to start with ``test_`` to be discoverable.
