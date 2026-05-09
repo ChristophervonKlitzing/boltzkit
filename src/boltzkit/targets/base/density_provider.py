@@ -1,65 +1,25 @@
 from abc import ABC, abstractmethod
+from typing import Callable, TYPE_CHECKING
+
 import numpy as np
+
+from boltzkit.targets.base.dispatched_eval.jax import JaxEval
 from boltzkit.targets.base.dispatched_eval.np import NumpyEval
-from boltzkit.utils.dataset import Dataset
+from boltzkit.targets.base.dispatched_eval.torch import TorchEval
 from boltzkit.utils.framework import (
-    make_agnostic,
     FrameworkAgnosticFunction,
+    GenericArrayType,
     detect_framework,
+    make_agnostic,
 )
-from typing import TYPE_CHECKING, Callable, Literal
 
 if TYPE_CHECKING:
-    from boltzkit.targets.base.dispatched_eval.torch import TorchEval
-    from boltzkit.targets.base.dispatched_eval.jax import JaxEval
-    import jax
     import torch
+    import jax
 
-from boltzkit.utils.framework import GenericArrayType
 
-
-class BaseTarget(ABC):
-    """
-    Abstract base class for unnormalized probability density targets.
-
-    A target represents a density of the form:
-
-    .. math::
-        p(x) \\propto \\tilde{p}(x)
-
-    where the normalized density is:
-
-    .. math::
-        p(x) = \\frac{1}{Z} \\tilde{p}(x)
-    """
-
-    def __init__(
-        self,
-        dim: int,
-    ):
-        """
-        Initialize a target distribution.
-
-        Parameters
-        ----------
-        dim : int
-            Dimensionality of the target space.
-        """
-        super().__init__()
-        self._dim = dim
-
-    @property
-    def dim(self):
-        """
-        Dimensionality of the target space.
-
-        Returns
-        -------
-        int
-            Dimension of the state space.
-        """
-        return self._dim
-
+class DensityProvider(ABC):
+    @abstractmethod
     def get_log_prob(self, x: "GenericArrayType") -> "GenericArrayType":
         """
         Evaluate unnormalized log-density.
@@ -79,6 +39,7 @@ class BaseTarget(ABC):
         """
         raise NotImplementedError
 
+    @abstractmethod
     def get_score(self, x: "GenericArrayType") -> "GenericArrayType":
         """
         Compute score function.
@@ -98,6 +59,7 @@ class BaseTarget(ABC):
         """
         raise NotImplementedError
 
+    @abstractmethod
     def get_log_prob_and_score(
         self, x: "GenericArrayType"
     ) -> tuple["GenericArrayType", "GenericArrayType"]:
@@ -119,110 +81,13 @@ class BaseTarget(ABC):
         """
         raise NotImplementedError
 
-    def can_sample(self) -> bool:
-        """
-        Return whether the target can be sampled from or not
 
-        :return: Returns whether this target can be sampled from or not
-        :rtype: bool
-        """
-        return False
-
-    def sample(self, n_samples: int, seed: int | None = None) -> np.ndarray:
-        """
-        Generate batched samples.
-
-        Parameters
-        ----------
-        n_samples : int
-            The number of samples to generate.
-        seed : int | None, optional
-            Random seed used to ensure reproducibility. If None, the
-            generator's current random state is used.
-
-        Returns
-        -------
-        np.ndarray
-            An array of generated samples with shape (n_samples, ...),
-            depending on the underlying data distribution/model.
-        """
-        raise NotImplementedError
-
-    def get_logZ(self) -> float | None:
-        """
-        Return log-normalization constant.
-
-        The density satisfies:
-
-        .. math::
-            p(x) = \\frac{1}{Z} \\tilde{p}(x)
-
-        Returns
-        -------
-        float | None
-            Value of log Z or None if unavailable.
-        """
-        return None
-
-    def load_dataset(
-        self,
-        type: Literal["train", "val", "test"],
-        length: int,
-        *,
-        include_samples: bool = True,
-        include_log_probs: bool = False,
-        include_scores: bool = False,
-    ) -> Dataset:
-        """
-        Load the dataset of the specified split.
-
-        This method retrieves samples and optionally associated
-        log_probs/energies and scores/forces.
-
-        Parameters
-        ----------
-        type : Literal["train", "val", "test"]
-            Dataset split to load.
-        length : int, optional
-            Maximum number of samples to load. If -1, all available samples are used.
-        T : float | int | None
-            Temperature (in Kelvin) identifying the dataset. Integers are cast to float. If None, the target's temperature is used.
-        include_samples : bool, default=True
-            Whether to return samples.
-        include_log_probs : bool, default=False
-            Whether to include energy values for each sample. Fails if no energies are available and `allow_autogen` is False.
-        include_scores : bool, default=False
-            Whether to include force values for each sample. Fails if no forces are available and `allow_autogen` is False.
-
-        Returns
-        -------
-        Dataset
-
-        Raises
-        ------
-        RuntimeError | NotImplementedError
-            If dataset configuration is missing or cannot be computed/retrieved
-        """
-        raise NotImplementedError
-
-
-class BackendWrappedTarget(BaseTarget):
+class WrappedDensityProvider(DensityProvider):
     """
     Target distribution that dispatches computations by converting the input array
     to the appropriate backend type, doing the log-prob and score evaluation with that backend,
     and converting the result back to the original input type.
     """
-
-    def __init__(self, dim):
-        """
-        Initialize framework-agnostic target.
-
-        Parameters
-        ----------
-        dim : int
-            Dimensionality of the target space.
-        """
-        super().__init__(dim)
 
     def get_log_prob(self, x: "GenericArrayType") -> "GenericArrayType":
         """
@@ -304,7 +169,7 @@ class BackendWrappedTarget(BaseTarget):
         raise NotImplementedError
 
 
-class NumPyTarget(BackendWrappedTarget):
+class NumpyDensityProvider(WrappedDensityProvider):
     """
     Base class for NumPy-based target distributions.
 
@@ -316,8 +181,9 @@ class NumPyTarget(BackendWrappedTarget):
     interface via `make_agnostic`.
     """
 
-    def __init__(self, dim: int):
-        super().__init__(dim)
+    def __init__(self, **kwargs):
+        super().__init__(kwargs)
+
         self._agnostic_impl = make_agnostic(
             implementation="numpy",
             value_fn=self._numpy_log_prob,
@@ -394,11 +260,14 @@ class NumPyTarget(BackendWrappedTarget):
         return self._agnostic_impl
 
 
-class JaxTarget(BackendWrappedTarget):
+class JaxDensityProvider(WrappedDensityProvider):
     def __init__(
-        self, dim: int, jax_log_prob_fn_single: Callable[["jax.Array"], "jax.Array"]
+        self,
+        *,
+        jax_log_prob_fn_single: Callable[["jax.Array"], "jax.Array"],
+        **kwargs,
     ):
-        super().__init__(dim)
+        super().__init__(**kwargs)
         self._agnostic_impl = make_agnostic(
             implementation="jax", value_fn=jax_log_prob_fn_single
         )
@@ -407,9 +276,9 @@ class JaxTarget(BackendWrappedTarget):
         return self._agnostic_impl
 
 
-class PyTorchTarget(BackendWrappedTarget):
-    def __init__(self, dim: int):
-        super().__init__(dim)
+class PytorchDensityProvider(WrappedDensityProvider):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
         self._agnostic_impl = make_agnostic(
             implementation="pytorch", value_fn=self._pytorch_log_prob
         )
@@ -425,7 +294,7 @@ class PyTorchTarget(BackendWrappedTarget):
         return self._agnostic_impl
 
 
-class DispatchedTarget(BaseTarget):
+class DispatchedDensityProvider(DensityProvider):
     """
     Target distribution that dispatches log-prob and score computations to the appropriate
     backend (NumPy, JAX, or PyTorch) at runtime.
@@ -436,19 +305,15 @@ class DispatchedTarget(BaseTarget):
     lazily via `_create_numpy_eval`, `_create_torch_eval`, and `_create_jax_eval`.
     """
 
-    def __init__(self, dim):
+    def __init__(self, **kwargs):
         """
         Initialize a dispatched target distribution.
 
         Backend evaluators for NumPy, JAX, and PyTorch are created lazily
         on first use via the corresponding `_create_*_eval` methods.
 
-        Parameters
-        ----------
-        dim : int
-            Dimensionality of the target space.
         """
-        super().__init__(dim)
+        super().__init__(**kwargs)
 
         self.__np_eval_cache: NumpyEval | None = None
         self.__torch_eval_cache = None

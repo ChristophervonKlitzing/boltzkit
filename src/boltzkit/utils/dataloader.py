@@ -1,11 +1,18 @@
+from abc import ABC
+from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
 import pickle
-from typing import Callable, Literal
+from typing import Callable, Literal, TYPE_CHECKING, TypedDict
 
 import numpy as np
 import openmm.app as app
 import mdtraj as md
+
+from boltzkit.utils.dataset import Dataset
+
+if TYPE_CHECKING:
+    from boltzkit.utils.cached_repo import CachedRepo
 
 
 @lru_cache
@@ -224,7 +231,7 @@ def cache_load_sample_derived_data(
     :type data_fpath: pathlib.Path or None
     :param data_cache_fpath: Path to the cache file for loading/saving data.
     :type data_cache_fpath: pathlib.Path or None
-    :param data_eval_fn: Function to compute derived data from samples.
+    :param data_eval_fn: Function to compute derived data from samples (e.g., log_probs or scores).
     :type data_eval_fn: Callable[[numpy.ndarray], numpy.ndarray] or None
     :param allow_autogen: If True, compute missing data when not available.
     :type allow_autogen: bool
@@ -244,13 +251,14 @@ def cache_load_sample_derived_data(
     if data_fpath and data_fpath.exists():
         data = np.load(data_fpath)
 
-        if data.shape[0] != n_samples:
+        if data.shape[0] < n_samples:
             raise ValueError(
-                f"Loaded data length mismatch: expected {n_samples} samples, "
-                f"but got {data.shape[0]} from '{data_fpath}'."
+                f"Too few sample-derived datapoints: For {n_samples} samples, only "
+                f"{data.shape[0]} sample-derived datapoints were found in '{data_fpath}'."
             )
+        data = data[:n_samples]
 
-    if cache_data and not allow_autogen:
+    if data is None and cache_data and not allow_autogen:
         raise ValueError("Cannot use caching without `auto_gen=True`")
 
     # 2. Try loading from cache if primary file wasn't found/provided
@@ -286,3 +294,190 @@ def cache_load_sample_derived_data(
         raise RuntimeError("Data could not be loaded from file, cache, or autogen.")
 
     return data
+
+
+class DatasetLoader(ABC):
+    def load_dataset(
+        self,
+        type: Literal["train", "val", "test"],
+        length: int,
+        *,
+        include_samples: bool = True,
+        include_log_probs: bool = False,
+        include_scores: bool = False,
+    ) -> Dataset:
+        """
+        Load the dataset of the specified split.
+
+        This method retrieves samples and optionally associated
+        log_probs/energies and scores/forces.
+
+        Parameters
+        ----------
+        type : Literal["train", "val", "test"]
+            Dataset split to load.
+        length : int, optional
+            Maximum number of samples to load. If -1, all available samples are used.
+        T : float | int | None
+            Temperature (in Kelvin) identifying the dataset. Integers are cast to float. If None, the target's temperature is used.
+        include_samples : bool, default=True
+            Whether to return samples.
+        include_log_probs : bool, default=False
+            Whether to include energy values for each sample. Fails if no energies are available and `allow_autogen` is False.
+        include_scores : bool, default=False
+            Whether to include force values for each sample. Fails if no forces are available and `allow_autogen` is False.
+
+        Returns
+        -------
+        Dataset
+
+        Raises
+        ------
+        ValueError | NotImplementedError | Exception
+            If dataset configuration is missing or cannot be computed/retrieved
+        """
+
+        raise NotImplementedError
+
+    def try_load_dataset(self, *args, **kwargs) -> Dataset | str:
+        """
+        Same input as `load_dataset` but instead of failing on a missing dataset, the error message is returned.
+        """
+        try:
+            dataset_or_error_msg = self.load_dataset(*args, **kwargs)
+        except Exception as e:
+            dataset_or_error_msg = str(e)
+
+        return dataset_or_error_msg
+
+
+def _get_dataset_config_from_cached_repo(repo: "CachedRepo", type: str, T: float = 1.0):
+    datasets: dict[str, dict[str, str]] | None = repo.config.get("datasets", None)
+    if datasets is None:
+        raise ValueError("Missing datasets config")
+
+    temp_cfg = datasets.get(str(T), None)
+    if temp_cfg is None:
+        available_temps = list(datasets.keys())
+        raise RuntimeError(
+            f"Missing dataset: "
+            f"Searched for temperature {T}K, but only found {available_temps}."
+        )
+
+    dset_cfg: dict[str, str] | str | None = temp_cfg.get(type, None)
+    if dset_cfg is None:
+        available_keys = list(temp_cfg.keys())
+        raise RuntimeError(
+            f"Missing dataset type for temperature {T}K. "
+            f"Searched for type '{type}', but only found {available_keys}."
+        )
+
+    if isinstance(dset_cfg, str):
+        dset_cfg = {"samples": dset_cfg}
+
+    return dset_cfg
+
+
+def _get_cache_path(
+    samples_fpath: Path,
+    cache_data_type: Literal["log_probs", "scores"] | str,
+) -> Path:
+    """
+    Creates a cache path next to the samples file, e.g.,
+    'samples.npy' -> 'samples.npy_log_probs.npy'
+    """
+    return samples_fpath.with_name(f"{samples_fpath.name}_{cache_data_type}.npy")
+
+
+@dataclass(frozen=True)
+class CacheLoadingArgs:
+    allow_autogen: bool = True
+    cache_log_probs: bool = True
+    cache_scores: bool = False
+
+
+class CachedRepoDatasetLoader(DatasetLoader):
+    def __init__(
+        self,
+        kB_T: float,
+        cached_repo: "CachedRepo",
+        log_prob_fn: Callable[[np.ndarray], np.ndarray] | None,
+        score_fn: Callable[[np.ndarray], np.ndarray] | None,
+        caching_args: CacheLoadingArgs | dict | None = None,
+    ):
+        super().__init__()
+
+        if caching_args is None:
+            caching_args = CacheLoadingArgs()
+        elif isinstance(caching_args, dict):
+            caching_args = CacheLoadingArgs(**caching_args)
+
+        self.__kB_T = kB_T
+        self.__repo = cached_repo
+        self.__log_prob_fn = log_prob_fn
+        self.__score_fn = score_fn
+
+        self.__allow_autogen = caching_args.allow_autogen
+        self.__cache_log_probs = caching_args.cache_log_probs
+        self.__cache_scores = caching_args.cache_scores
+
+    def load_dataset(
+        self,
+        type,
+        length,
+        *,
+        include_samples=True,
+        include_log_probs=False,
+        include_scores=False,
+    ):
+        """Load from cached repo assuming a specific layout"""
+        dset_cfg = _get_dataset_config_from_cached_repo(self.__repo, type=type)
+        remote_samples_fpath = dset_cfg.get("samples")
+        samples_fpath = self.__repo.load_file(remote_samples_fpath)
+        samples: np.ndarray = np.load(samples_fpath)
+
+        if samples.shape[0] < length:
+            raise ValueError(
+                f"Requested more samples ({length}) than available ({samples.shape[0]})"
+            )
+        samples = samples[:length]
+
+        if include_log_probs:
+            log_probs_fpath = self.__repo.try_load_file(dset_cfg.get("log_probs"))
+            log_probs_cache_fpath = _get_cache_path(
+                samples_fpath, cache_data_type="log_probs"
+            )
+
+            log_probs = cache_load_sample_derived_data(
+                samples=samples,
+                data_fpath=log_probs_fpath,
+                data_cache_fpath=log_probs_cache_fpath,
+                data_eval_fn=self.__log_prob_fn,
+                allow_autogen=self.__allow_autogen,
+                cache_data=self.__cache_log_probs,
+            )
+        else:
+            log_probs = None
+
+        if include_scores:
+            scores_fpath = self.__repo.try_load_file(dset_cfg.get("scores"))
+            scores_cache_fpath = _get_cache_path(
+                samples_fpath, cache_data_type="scores"
+            )
+            scores = cache_load_sample_derived_data(
+                samples,
+                data_fpath=scores_fpath,
+                data_cache_fpath=scores_cache_fpath,
+                data_eval_fn=self.__score_fn,
+                allow_autogen=self.__allow_autogen,
+                cache_data=self.__cache_scores,
+            )
+        else:
+            scores = None
+
+        if not include_samples:
+            samples = None
+
+        return Dataset(
+            kB_T=self.__kB_T, samples=samples, log_probs=log_probs, scores=scores
+        )

@@ -2,20 +2,6 @@ from boltzkit.targets.base import DispatchedTarget
 
 
 class DemoDispatchedTarget(DispatchedTarget):
-    def can_sample(self):
-        raise NotImplementedError
-
-    def load_dataset(
-        self,
-        type,
-        length,
-        *,
-        include_samples=True,
-        include_log_probs=False,
-        include_scores=False,
-    ):
-        raise NotImplementedError
-
     def _create_numpy_eval(self):
         """
         Lazy instantiation of NumPy-based log-prob & score evaluation.

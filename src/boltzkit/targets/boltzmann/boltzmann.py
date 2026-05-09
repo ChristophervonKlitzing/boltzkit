@@ -5,7 +5,6 @@ import warnings
 import numpy as np
 
 from boltzkit.utils.dataloader import cache_load_sample_derived_data
-from boltzkit.utils.dataset_helper import get_dataset_config_from_cached_repo
 from boltzkit.utils.molecular.conversion import vec3_list_to_numpy
 
 

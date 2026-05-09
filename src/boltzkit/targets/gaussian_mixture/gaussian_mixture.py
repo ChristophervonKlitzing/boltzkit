@@ -4,10 +4,20 @@ import numpy as np
 from scipy.special import logsumexp
 
 from boltzkit.targets.base import DispatchedTarget
+from boltzkit.targets.base.dataset_provider import RawDataset
 from boltzkit.utils.dataset import Dataset
 
+from boltzkit.targets.base import (
+    BaseTarget,
+    DispatchedDensityProvider,
+    SampleProvider,
+    ProceduralDatasetProvider,
+)
 
-class DiagonalGaussianMixture(DispatchedTarget):
+
+class DiagonalGaussianMixture(
+    BaseTarget, DispatchedDensityProvider, SampleProvider, ProceduralDatasetProvider
+):
     """
     Gaussian Mixture Model (GMM) with diagonal covariance matrices.
 
@@ -29,6 +39,7 @@ class DiagonalGaussianMixture(DispatchedTarget):
         means: np.ndarray,
         diag_stds: np.ndarray,
         logits: np.ndarray,
+        **kwargs,
     ):
         """
         Initialize a diagonal-covariance Gaussian mixture model.
@@ -58,8 +69,7 @@ class DiagonalGaussianMixture(DispatchedTarget):
                 f"but got array with shape {means.shape}."
             )
 
-        dim = means.shape[1]
-        super().__init__(dim)
+        super().__init__(dim=means.shape[1], logZ=0.0, **kwargs)
 
         self._n_components = means.shape[0]
 
@@ -190,9 +200,6 @@ class DiagonalGaussianMixture(DispatchedTarget):
             seed=seed,
         )
 
-    def can_sample(self):
-        return True
-
     def sample(self, n_samples, seed: int | None = None):
         rng = np.random.default_rng(seed)
 
@@ -219,64 +226,10 @@ class DiagonalGaussianMixture(DispatchedTarget):
 
         return samples
 
-    def load_dataset(
-        self,
-        type: Literal["train", "val", "test", "seed"],
-        length: int,
-        *,
-        include_samples: bool = True,
-        include_log_probs: bool = False,
-        include_scores: bool = False,
-        seed: int = 0,
-    ) -> Dataset:
-        """
-        Generate a deterministic synthetic dataset of a given split and size.
-
-        Each combination of `type` and `seed` defines a unique infinite
-        pseudo-random dataset. The returned dataset corresponds to the first
-        `length` elements (a prefix) of that deterministic sequence.
-
-        In particular, for any fixed `type` and `seed`:
-
-            load_dataset(type, n, seed=seed)
-            == load_dataset(type, n + k, seed=seed)[:n]
-
-        for all n >= 0 and k >= 0.
-
-        This means increasing `length` extends the same underlying dataset
-        rather than generating an unrelated new sample.
-
-        Parameters
-        ----------
-        type : {"train", "val", "test"}
-            Dataset split identifier. Different splits produce different
-            deterministic dataset streams.
-
-        length : int
-            Number of samples to generate (the prefix length).
-
-        seed : int, optional
-            Additional seed used to select a reproducible variant of the
-            dataset within the chosen split. Default is 0.
-
-        Returns
-        -------
-        Dataset
-            A dataset containing the first `length` elements of the
-            deterministic sequence defined by (`type`, `seed`).
-
-        Notes
-        -----
-        - The dataset is fully reproducible for a fixed (`type`, `seed`) pair.
-        - Different `type` values generate independent dataset streams.
-        - Increasing `length` preserves all previously generated samples.
-        """
-
-        split_ids = {"train": 0, "val": 1, "test": 2}
-        seeds = np.random.default_rng(seed).integers(0, 2**32, size=3)
-        root_seed = seeds[split_ids[type]]
-
-        ss = np.random.SeedSequence(root_seed)
+    def _generate_procedural_prefix(
+        self, seed, length, include_samples, include_log_probs, include_scores
+    ):
+        ss = np.random.SeedSequence(seed)
 
         # two independent child streams
         ss_comp, ss_eps = ss.spawn(2)
@@ -316,7 +269,9 @@ class DiagonalGaussianMixture(DispatchedTarget):
         if not include_samples:
             samples = None
 
-        return Dataset(kB_T=1.0, samples=samples, log_probs=log_probs, scores=scores)
+        return Dataset(
+            kB_T=self.kB_T, samples=samples, log_probs=log_probs, scores=scores
+        )
 
     def _create_numpy_eval(self):
         from boltzkit.targets.gaussian_mixture._np_mog import NumpyMoG
