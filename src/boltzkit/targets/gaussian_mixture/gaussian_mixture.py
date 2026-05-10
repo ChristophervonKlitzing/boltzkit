@@ -1,10 +1,6 @@
-from typing import Literal
-
 import numpy as np
 from scipy.special import logsumexp
 
-from boltzkit.targets.base import DispatchedTarget
-from boltzkit.targets.base.dataset_provider import RawDataset
 from boltzkit.utils.dataset import Dataset
 
 from boltzkit.targets.base import (

@@ -1,5 +1,5 @@
 import numpy as np
-from boltzkit.targets.base.base import NumpyEval
+from boltzkit.targets.base.dispatched_eval.np import NumpyEval
 
 
 def lennard_jones_energy_numpy(r: np.ndarray, eps=1.0, rm=1.0):

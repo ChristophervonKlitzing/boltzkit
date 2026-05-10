@@ -1,12 +1,4 @@
-from .base import (
-    DispatchedTarget,
-    BackendWrappedTarget,
-    NumPyTarget,
-    JaxTarget,
-    PyTorchTarget,
-)
-
-from .new_base import BaseTarget
+from .base import BaseTarget
 from .dataset_provider import (
     DatasetProvider,
     ExternalDatasetProvider,
@@ -21,9 +13,11 @@ from .sample_provider import SampleProvider
 
 __all__ = [
     "BaseTarget",
-    "BackendWrappedTarget",
-    "DispatchedTarget",
-    "NumPyTarget",
-    "DiagonalGaussianMixture",
-    "MolecularBoltzmann",
+    "DatasetProvider",
+    "ExternalDatasetProvider",
+    "ProceduralDatasetProvider",
+    "DensityProvider",
+    "NumpyDensityProvider",
+    "DispatchedDensityProvider",
+    "SampleProvider",
 ]

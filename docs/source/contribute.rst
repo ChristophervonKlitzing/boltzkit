@@ -20,29 +20,36 @@ Templates to create targets can be found under::
 
 https://github.com/ChristophervonKlitzing/boltzkit/tree/main/templates/targets
 
-Targets can be implemented using either:
 
-- :class:`boltzkit.targets.base.base.NumPyTarget`
-- :class:`boltzkit.targets.base.base.DispatchedTarget`
+A target is a composition of capability providers that define how it behaves,
+for example whether it can evaluate densities or provide datasets. The minimal requirement
+is to inherit from :class:`~boltzkit.targets.base.base.BaseTarget`.
+
+Density providers
+~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Define how a target evaluates probabilities and scores.
+
+- :class:`~boltzkit.targets.base.density_provider.NumpyDensityProvider`
+  NumPy-based implementation of `log_prob` and score functions.
+
+- :class:`~boltzkit.targets.base.density_provider.DispatchedDensityProvider`
+  Multi-backend implementation supporting NumPy, PyTorch, and JAX.
+
+Dataset providers
+~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Define how a target provides or constructs datasets.
+
+- :class:`~boltzkit.targets.base.dataset_provider.ExternalDatasetProvider`
+  Uses a manually specified dataloader such as
+  :class:`~boltzkit.utils.dataloader.CachedRepoDatasetLoader`
+  to load datasets from external sources like Hugging Face.
+
+- :class:`~boltzkit.targets.base.dataset_provider.ProceduralDatasetProvider`
+  Generates datasets procedurally (e.g. Gaussian mixture models).
 
 
-NumPy Target
-~~~~~~~~~~~~
-
-- Log-prob and optional score implementation in NumPy
-- Framework conversion (PyTorch / JAX) is handled automatically
-- Best choice for targets that use a simulation framework such as OpenMM to evaluate energies and forces
-
-
-Dispatched Target
-~~~~~~~~~~~~~~~~~
-
-- Log-prob and optional score implementation for every framework (NumPy, JAX, PyTorch)
-- Evaluation is automatically dispatched based on the type of the input
-- Best for simple targets where log-probabilities and scores can be easily implemented manually, such as Gaussian mixtures
-
-**WARNING:** This target requires multiple implementations of the same mathematical function in different frameworks.
-Make sure that they are consistent (e.g., through unit tests)!
 
 Adding evaluation nodes
 -----------------------

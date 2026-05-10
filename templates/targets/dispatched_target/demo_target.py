@@ -1,7 +1,7 @@
-from boltzkit.targets.base import DispatchedTarget
+from boltzkit.targets.base import BaseTarget, DispatchedDensityProvider
 
 
-class DemoDispatchedTarget(DispatchedTarget):
+class DemoDispatchedTarget(BaseTarget, DispatchedDensityProvider):
     def _create_numpy_eval(self):
         """
         Lazy instantiation of NumPy-based log-prob & score evaluation.

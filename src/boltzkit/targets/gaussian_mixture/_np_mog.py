@@ -1,6 +1,6 @@
 import numpy as np
 from scipy.special import logsumexp
-from boltzkit.targets.base.base import NumpyEval
+from boltzkit.targets.base.dispatched_eval.np import NumpyEval
 
 
 class NumpyMoG(NumpyEval):

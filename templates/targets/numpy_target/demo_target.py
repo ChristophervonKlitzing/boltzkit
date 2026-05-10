@@ -1,7 +1,7 @@
-from boltzkit.targets.base import NumPyTarget
+from boltzkit.targets.base import BaseTarget, NumpyDensityProvider
 
 
-class DemoNumpyTarget(NumPyTarget):
+class DemoNumpyTarget(BaseTarget, NumpyDensityProvider):
     """
     Minimal example of a NumPy-based target implementation.
     """
