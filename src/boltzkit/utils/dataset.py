@@ -308,3 +308,67 @@ class Dataset:
             forces = self._scores * self._kB_T
 
         return self.__get_sized_array(forces, length, "forces")
+
+    def scale_domain(self, length_scale: float) -> "Dataset":
+        """
+        Creates a new dataset with a rescaled spatial domain.
+
+        The transformation rescales the coordinate samples and all related
+        differential quantities consistently according to the change of
+        variables:
+
+        .. math::
+
+            x_{scaled} = \frac{x}{L}
+
+        where :math:`L` is the provided ``length_scale``.
+
+        Under this transformation:
+
+        * Samples/coordinates are divided by ``length_scale``
+        * Scores are multiplied by ``length_scale``
+        * Forces are multiplied by ``length_scale``
+
+        Log probabilities, energies, and thermodynamic quantities are left
+        unchanged.
+
+        Parameters
+        ----------
+        length_scale : float
+            Spatial scaling factor :math:`L` used to rescale the dataset
+            domain. A value greater than ``1`` contracts the coordinate
+            representation, while a value smaller than ``1`` expands it.
+
+        Returns
+        -------
+        Dataset
+            A new dataset instance with rescaled samples, scores, and forces.
+
+        Notes
+        -----
+        This operation does **NOT** modify the dataset in-place.
+        """
+
+        if self._samples is not None:
+            samples = self._samples / length_scale
+        else:
+            samples = None
+
+        if self._scores is not None:
+            scores = self._scores * length_scale
+        else:
+            scores = None
+
+        if self._forces is not None:
+            forces = self._forces * length_scale
+        else:
+            forces = None
+
+        return Dataset(
+            kB_T=self._kB_T,
+            samples=samples,
+            log_probs=self._log_probs,
+            energies=self._energies,
+            scores=scores,
+            forces=forces,
+        )

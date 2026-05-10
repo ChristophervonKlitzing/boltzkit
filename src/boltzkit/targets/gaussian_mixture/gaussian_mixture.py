@@ -227,7 +227,7 @@ class DiagonalGaussianMixture(
         return samples
 
     def _generate_procedural_prefix(
-        self, seed, length, include_samples, include_log_probs, include_scores
+        self, seed, length, include_samples, include_log_probs, include_scores, **kwargs
     ):
         ss = np.random.SeedSequence(seed)
 

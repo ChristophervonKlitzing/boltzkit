@@ -22,6 +22,7 @@ class DatasetProvider(ABC):
         include_samples: bool = True,
         include_log_probs: bool = False,
         include_scores: bool = False,
+        **kwargs,
     ):
         raise NotImplementedError
 
@@ -41,6 +42,7 @@ class ExternalDatasetProvider(DatasetProvider):
         include_samples=True,
         include_log_probs=False,
         include_scores=False,
+        **kwargs,
     ):
         return self._dataset_loader.load_dataset(
             type=type,
@@ -48,6 +50,7 @@ class ExternalDatasetProvider(DatasetProvider):
             include_samples=include_samples,
             include_log_probs=include_log_probs,
             include_scores=include_scores,
+            **kwargs,
         )
 
 
@@ -68,6 +71,7 @@ class ProceduralDatasetProvider(DatasetProvider):
         include_samples=True,
         include_log_probs=False,
         include_scores=False,
+        **kwargs,
     ):
         # all three splits will always have different root-seeds (guaranteed by design)
         split_ids = {"train": 0, "val": 1, "test": 2}
@@ -79,6 +83,7 @@ class ProceduralDatasetProvider(DatasetProvider):
             include_samples=include_samples,
             include_log_probs=include_log_probs,
             include_scores=include_scores,
+            **kwargs,
         )
 
         if include_samples and dataset.get_samples() is None:
@@ -100,5 +105,6 @@ class ProceduralDatasetProvider(DatasetProvider):
         include_samples: bool,
         include_log_probs: bool,
         include_scores: bool,
+        **kwargs,
     ) -> Dataset:
         raise NotImplementedError("Procedural generation of dataset is not implemented")

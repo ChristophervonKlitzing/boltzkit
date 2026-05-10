@@ -305,6 +305,7 @@ class DatasetLoader(ABC):
         include_samples: bool = True,
         include_log_probs: bool = False,
         include_scores: bool = False,
+        **kwargs,
     ) -> Dataset:
         """
         Load the dataset of the specified split.
@@ -386,11 +387,30 @@ def _get_cache_path(
     Creates a cache path next to the samples file, e.g.,
     'samples.npy' -> 'samples.npy_log_probs.npy'
     """
-    return samples_fpath.with_name(f"{samples_fpath.name}_{cache_data_type}.npy")
+    return samples_fpath.with_name(f"{samples_fpath.name}_cache_{cache_data_type}.npy")
 
 
 @dataclass(frozen=True)
 class CacheLoadingArgs:
+    """
+    Configuration options controlling dataset cache loading and automatic
+    generation of sample-related quantities (log-probs/energies, scores/forces).
+
+    Parameters
+    ----------
+    allow_autogen : bool, optional, default=True
+        If ``True``, missing quantities (e.g., log-probs/energies, scores/forces)
+        may be computed automatically online if possible.
+
+    cache_log_probs : bool, optional, default=True
+        Whether log-probs/energies can be cached after online-computation (allow_autogen=True)
+        or loaded from cache files if available.
+
+    cache_scores : bool, optional, default=False
+        Whether scores/forces can be cached after online-computation (allow_autogen=True)
+        or loaded from cache files if available.
+    """
+
     allow_autogen: bool = True
     cache_log_probs: bool = True
     cache_scores: bool = False
@@ -401,6 +421,7 @@ class CachedRepoDatasetLoader(DatasetLoader):
         self,
         kB_T: float,
         cached_repo: "CachedRepo",
+        T: float,
         log_prob_fn: Callable[[np.ndarray], np.ndarray] | None,
         score_fn: Callable[[np.ndarray], np.ndarray] | None,
         caching_args: CacheLoadingArgs | dict | None = None,
@@ -414,6 +435,8 @@ class CachedRepoDatasetLoader(DatasetLoader):
 
         self.__kB_T = kB_T
         self.__repo = cached_repo
+        self._T = T
+
         self.__log_prob_fn = log_prob_fn
         self.__score_fn = score_fn
 
@@ -429,9 +452,14 @@ class CachedRepoDatasetLoader(DatasetLoader):
         include_samples=True,
         include_log_probs=False,
         include_scores=False,
+        **kwargs,
     ):
         """Load from cached repo assuming a specific layout"""
-        dset_cfg = _get_dataset_config_from_cached_repo(self.__repo, type=type)
+        T_old = self._T
+        T_new = kwargs.get("T", T_old)  # Get new temperature if specified
+        kB_T_new = self.__kB_T * (T_new / T_old)  # get scaled constant
+
+        dset_cfg = _get_dataset_config_from_cached_repo(self.__repo, type=type, T=T_new)
         remote_samples_fpath = dset_cfg.get("samples")
         samples_fpath = self.__repo.load_file(remote_samples_fpath)
         samples: np.ndarray = np.load(samples_fpath)
@@ -479,5 +507,31 @@ class CachedRepoDatasetLoader(DatasetLoader):
             samples = None
 
         return Dataset(
-            kB_T=self.__kB_T, samples=samples, log_probs=log_probs, scores=scores
+            kB_T=kB_T_new, samples=samples, log_probs=log_probs, scores=scores
         )
+
+
+class DomainScaledDatasetLoader(DatasetLoader):
+    def __init__(self, dataset_loader: DatasetLoader, length_scale: float):
+        super().__init__()
+        self._loader = dataset_loader
+        self._length_scale = length_scale
+
+    def load_dataset(
+        self,
+        type,
+        length,
+        *,
+        include_samples=True,
+        include_log_probs=False,
+        include_scores=False,
+        **kwargs,
+    ):
+        return self._loader.load_dataset(
+            type=type,
+            length=length,
+            include_samples=include_samples,
+            include_log_probs=include_log_probs,
+            include_scores=include_scores,
+            **kwargs,
+        ).scale_domain(self._length_scale)

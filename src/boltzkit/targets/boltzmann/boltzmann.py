@@ -4,11 +4,19 @@ import warnings
 
 import numpy as np
 
-from boltzkit.utils.dataloader import cache_load_sample_derived_data
+from boltzkit.targets.base import (
+    BaseTarget,
+    NumpyDensityProvider,
+    ExternalDatasetProvider,
+)
+
+from boltzkit.utils.dataloader import (
+    CacheLoadingArgs,
+    CachedRepoDatasetLoader,
+    DomainScaledDatasetLoader,
+)
 from boltzkit.utils.molecular.conversion import vec3_list_to_numpy
 
-
-from boltzkit.targets.base import NumPyTarget
 
 from boltzkit.utils.cached_repo import CachedRepo, create_cached_repo
 from boltzkit.utils.dataset import Dataset
@@ -62,7 +70,7 @@ def _parse_system_args(system_args: dict):
     return system_args
 
 
-class MolecularBoltzmann(NumPyTarget):
+class MolecularBoltzmann(BaseTarget, NumpyDensityProvider, ExternalDatasetProvider):
     """
     Molecular energy-based Boltzmann target using OpenMM.
 
@@ -82,7 +90,8 @@ class MolecularBoltzmann(NumPyTarget):
         n_workers: None | int = -1,
         openmm_platform: Literal["CPU", "CUDA"] | None = "CPU",
         length_unit: Literal["angstrom", "nanometer"] | float = "nanometer",
-        # energy_transform: FrameworkAgnosticFunction | None = None,
+        dataset_caching_args: CacheLoadingArgs | dict | None = None,
+        cached_repo_args: dict | None = None,
         **kwargs,
     ):
         """
@@ -138,19 +147,27 @@ class MolecularBoltzmann(NumPyTarget):
 
             * ``"angstrom"``: Equivalent to :math:`L = 0.1`
             * ``"nanometer"``: Equivalent to :math:`L = 1.0` (default)
+        dataset_caching_args : CacheLoadingArgs | dict | None, optional (default None)
+            Specify arguments on how dataset related quantities should be handled on dataset loading
+            (e.g., caching, automatic generation)
+        cached_repo_args : dict
+            Additional arguments passed to the repository loader.
 
         **kwargs : dict
-            Additional arguments passed to the repository loader.
+            Additional arguments passed to the base classes
         """
         if openmm_platform != "CPU" and n_workers is not None:
             warnings.warn(
                 f"Parallel energy & force evaluation ({n_workers=}) makes no sense when not using {openmm_platform=}"
             )
 
+        if cached_repo_args is None:
+            cached_repo_args = {}
+
         if isinstance(path, CachedRepo):
             self._repo = path
         elif isinstance(path, str):
-            self._repo = create_cached_repo(path, **kwargs)
+            self._repo = create_cached_repo(path, **cached_repo_args)
         else:
             raise ValueError(
                 f"The provided 'path' must be either of type '{CachedRepo.__name__}' or '{str.__name__}' but got '{type(path).__name__}'"
@@ -162,7 +179,9 @@ class MolecularBoltzmann(NumPyTarget):
         self._spatial_dims = 3
         self._n_nodes: int = self._system.getNumParticles()
         dim = self.spatial_dims * self.n_atoms
-        super().__init__(dim)
+
+        # dim, kB_T=kB_in_eV_per_K, **kwargs
+        super().__init__(dim=dim, kB_T=kB_in_eV_per_K * self._temperature, **kwargs)
 
         self._n_workers = n_workers
         self._openmm_platform = openmm_platform
@@ -178,6 +197,23 @@ class MolecularBoltzmann(NumPyTarget):
         else:
             self._length_scale = float(length_unit)
 
+        # === Initialize dataset loading ===
+        dataset_loader_nm = CachedRepoDatasetLoader(
+            kB_T=self.kB_T,
+            cached_repo=self._repo,
+            T=self._temperature,
+            log_prob_fn=self._get_log_probs_nm,  # unscaled version required
+            score_fn=self._get_scores_nm,  # unscaled version required
+            caching_args=dataset_caching_args,
+        )
+
+        # automatically scales loaded datasets using the specified length-scale
+        # e.g., samples_nm -> samples_angstrom (forces and scores scaled accordingly)
+        dataset_loader = DomainScaledDatasetLoader(
+            dataset_loader_nm, length_scale=self._length_scale
+        )
+        self.set_dataset_loader(dataset_loader)
+
     @classmethod
     def create_from_pdb(
         cls,
@@ -190,7 +226,7 @@ class MolecularBoltzmann(NumPyTarget):
         ),
         temperature: float = 300.0,
         cached_repo_args: dict | None = None,
-        boltzmann_args: dict | None = None,
+        **kwargs,
     ):
         """
         Alternative constructor to initialize a system directly from a PDB file.
@@ -216,7 +252,7 @@ class MolecularBoltzmann(NumPyTarget):
         cached_repo_args : dict, optional
             Additional keyword arguments passed to the ``create_cached_repo``
             utility.
-        boltzmann_args : dict, optional
+        kwargs : dict
             Additional keyword arguments passed to the :class:`MolecularBoltzmann`
             constructor (e.g., ``length_unit``, ``n_workers``).
 
@@ -258,10 +294,7 @@ class MolecularBoltzmann(NumPyTarget):
             f"virtual://{name}", file_tree=file_tree, **cached_repo_args
         )
 
-        if boltzmann_args is None:
-            boltzmann_args = {}
-
-        return MolecularBoltzmann(virt_repo, **boltzmann_args)
+        return MolecularBoltzmann(virt_repo, **kwargs)
 
     def _get_system_args(self) -> dict:
         system_args = self._repo.config.get("system_args", {})
@@ -418,8 +451,26 @@ class MolecularBoltzmann(NumPyTarget):
         score = forces / (kB_in_eV_per_K * T)
         return score
 
+    def _get_log_probs_nm(
+        self,
+        x_nm: np.ndarray,
+    ) -> np.ndarray:
+        energy, _ = self.energy_eval.evaluate_batch(
+            x_nm, include_energy=True, include_forces=False
+        )
+        return self._energy_to_log_prob(energy)
+
+    def _get_scores_nm(self, x_nm: np.ndarray) -> np.ndarray:
+        _, forces_nm = self.energy_eval.evaluate_batch(
+            x_nm, include_energy=False, include_forces=True
+        )
+        return self._forces_to_score(forces_nm)
+
     def get_energy_and_forces(
-        self, x: np.ndarray, include_energy: bool = True, include_forces: bool = True
+        self,
+        x: np.ndarray,
+        include_energy: bool = True,
+        include_forces: bool = True,
     ) -> tuple[np.ndarray | None, np.ndarray | None]:
         """
         Compute energy and forces for a batch of configurations.
@@ -642,9 +693,6 @@ class MolecularBoltzmann(NumPyTarget):
         """
         return self._n_nodes
 
-    def can_sample(self):
-        return False
-
     def load_dataset_old(
         self,
         type: Literal["train", "val", "test"],
@@ -772,157 +820,6 @@ class MolecularBoltzmann(NumPyTarget):
             cache_energies=cache_log_probs,
             cache_forces=cache_scores,
         )
-
-        if not include_samples:
-            samples = None
-
-        kB_T = kB_in_eV_per_K * T
-        return Dataset(kB_T, samples=samples, energies=energies, forces=forces)
-
-    def load_dataset(
-        self,
-        type: Literal["train", "val", "test"],
-        length: int = -1,
-        *,
-        T: float | int | None = None,
-        #
-        include_samples: bool = True,
-        include_log_probs: bool = False,
-        include_scores: bool = False,
-        #
-        cache_log_probs: bool = True,
-        cache_scores: bool = False,
-        #
-        allow_autogen: bool = True,
-    ) -> Dataset:
-        """
-        Load a dataset for a given temperature and dataset split.
-
-        This method retrieves samples and optionally associated
-        energies and forces. It supports loading
-        precomputed data, retrieving cached values, and automatically
-        generating missing quantities (energies or forces) on demand.
-
-        It is recommended to cache energies and forces when they are computed on demand to avoid repeated expensive OpenMM evaluations.
-
-        Cached values are only used if both conditions are satisfied:
-         - the corresponding ``include_log_probs`` / ``include_scores`` flag is set to ``True``, and
-         - the corresponding ``cache_log_probs`` / ``cache_scores`` flag is also set to ``True``.
-
-        Otherwise, cached values are ignored.
-
-        Example:
-
-        .. code-block:: python
-
-            load_dataset(..., include_log_probs=True, cache_log_probs=False)
-            # → energies are NOT loaded from cache
-
-            load_dataset(..., include_log_probs=True, cache_log_probs=True)
-            # → energies ARE loaded from cache (if available)
-
-
-        Parameters
-        ----------
-        type : Literal["train", "val", "test"]
-            Dataset split to load.
-        length : int, optional
-            Maximum number of samples to load. If -1, all available samples are used.
-        T : float | int | None
-            Temperature (in Kelvin) identifying the dataset. Integers are cast to float. If None, the target's temperature is used.
-        include_samples : bool, default=True
-            Whether to return samples.
-        include_log_probs : bool, default=False
-            Whether to include energy values for each sample. Fails if no energies are available and `allow_autogen` is False.
-        include_scores : bool, default=False
-            Whether to include force values for each sample. Fails if no forces are available and `allow_autogen` is False.
-        cache_log_probs : bool, default=True
-            Whether to use cached and/or cache computed energies locally when they are generated. Requires `allow_autogen` to be True.
-        cache_scores : bool, default=False
-            Whether to use cached and/or cache computed forces locally when they are generated. Requires `allow_autogen` to be True.
-        allow_autogen : bool, default=True
-            If True, missing energies or forces are computed on demand. Without caching being enabled,
-            energies and forces will be re-computed each time this function is called.
-
-        Returns
-        -------
-        Dataset
-
-        Raises
-        ------
-        RuntimeError
-            If dataset configuration is missing or if the requested temperature
-            or dataset split is not found.
-
-        Notes
-        -----
-        - If energies or forces are missing, they may be:
-          1. Loaded from remote files if available,
-          2. Retrieved from a local cache if enabled,
-          3. Computed on demand if `allow_autogen=True`.
-        - Forces are internally scaled by `self._length_scale` when loaded and cached in nanometers.
-        """
-
-        if T is None:
-            T = self._temperature
-
-        if isinstance(T, int):
-            T = float(T)
-
-        dset_cfg = get_dataset_config_from_cached_repo(self._repo, type=type, T=T)
-
-        samples = self.__load_samples(dset_cfg, T, length)
-
-        if include_log_probs or include_scores:
-            cache_prefix = f"_cached_dataset_{T}K_{type}"
-            samples_nm = samples * self._length_scale
-
-        if include_log_probs:
-            remote_energies_fpath = dset_cfg.get("energies", None)
-            energies_local_fpath = self._repo.try_load_file(remote_energies_fpath)
-            energies_cache_fpath = (
-                self._repo.local_path / f"{cache_prefix}_energies.npy"
-            )
-
-            def evaluate_energies(x_nm: np.ndarray) -> np.ndarray:
-                energies, _ = self.energy_eval.evaluate_batch(
-                    x_nm, include_energy=True, include_forces=False
-                )
-                return energies
-
-            energies = cache_load_sample_derived_data(
-                samples_nm,
-                data_fpath=energies_local_fpath,
-                data_cache_fpath=energies_cache_fpath,
-                data_eval_fn=evaluate_energies,
-                allow_autogen=allow_autogen,
-                cache_data=cache_log_probs,
-            )
-        else:
-            energies = None
-
-        if include_scores:
-            remote_forces_fpath = dset_cfg.get("forces", None)
-            forces_local_fpath = self._repo.try_load_file(remote_forces_fpath)
-            forces_cache_fpath = self._repo.local_path / f"{cache_prefix}_forces.npy"
-
-            def evaluate_forces(x_nm: np.ndarray) -> np.ndarray:
-                _, forces_nm = self.energy_eval.evaluate_batch(
-                    x_nm, include_energy=False, include_forces=True
-                )
-                return forces_nm
-
-            forces_nm = cache_load_sample_derived_data(
-                samples_nm,
-                data_fpath=forces_local_fpath,
-                data_cache_fpath=forces_cache_fpath,
-                data_eval_fn=evaluate_forces,
-                allow_autogen=allow_autogen,
-                cache_data=cache_scores,
-            )
-            forces = forces_nm * self._length_scale
-        else:
-            forces = None
 
         if not include_samples:
             samples = None
@@ -1109,13 +1006,6 @@ class MolecularBoltzmann(NumPyTarget):
         return energies, forces
 
 
-"""
-TODO: 
-- Implement get_energy_numpy, get_forces_numpy, and get_energy_and_forces_numpy()
-- potentially allow framework-agnostic decorator to ignore self parameter to be directly applicable
-"""
-
-
 def print_z_matrix(z_matrix: list[tuple[int, int, int, int]]):
     if not z_matrix:
         print("--- z-matrix ---")
@@ -1151,20 +1041,31 @@ if __name__ == "__main__":
         length_unit="angstrom",
         n_workers=None,
     )
+
     dset_old = target.load_dataset_old(
         "val",
-        length=2,
+        length=1,
         include_log_probs=True,
         cache_log_probs=True,
+        include_scores=True,
+        cache_scores=True,
         allow_autogen=True,
     )
+
     dset_new = target.load_dataset(
         "val",
-        length=10,
+        length=1,
         include_log_probs=True,
-        cache_log_probs=True,
-        allow_autogen=True,
+        include_scores=True,
     )
+
+    print(dset_old.get_samples())
+    print(dset_new.get_samples())
+    print()
+    print(dset_old.get_scores())
+    print(dset_new.get_scores())
+
+    print(dset_old.get_log_probs(), dset_new.get_log_probs())
     print(dset_old.get_energies(), dset_new.get_energies())
 
     exit()

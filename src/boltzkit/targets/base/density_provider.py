@@ -182,7 +182,7 @@ class NumpyDensityProvider(WrappedDensityProvider):
     """
 
     def __init__(self, **kwargs):
-        super().__init__(kwargs)
+        super().__init__(**kwargs)
 
         self._agnostic_impl = make_agnostic(
             implementation="numpy",

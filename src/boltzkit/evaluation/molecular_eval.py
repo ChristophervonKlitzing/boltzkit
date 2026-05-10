@@ -471,22 +471,18 @@ if __name__ == "__main__":
     val_dataset = bm.load_dataset(
         T=300.0, type="val", length=10_000, include_log_probs=True
     )
-    val_samples = val_dataset.get_samples()
-    print("loaded dataset size:", val_samples.shape)
-
-    true_samples = val_samples
-    true_samples = true_samples.reshape(true_samples.shape[0], -1)
+    print(f"loaded {val_dataset=}:", val_dataset.size)
 
     test_dataset = bm.load_dataset(
-        T=300.0, type="test", length=10_000, include_log_probs=True
+        T=300.0, type="train", length=10_000, include_log_probs=True
     )
+    print(f"loaded {test_dataset=}:", test_dataset.size)
+
+    true_samples = val_dataset.get_samples()
     pred_samples = test_dataset.get_samples()
-    pred_samples = pred_samples.reshape(pred_samples.shape[0], -1)
-    # pred_samples: np.ndarray = np.load("300K_val.npy", mmap_mode="r")[:10_000] / 10.0
-    # pred_samples = pred_samples.reshape(pred_samples.shape[0], -1)
 
     true_samples_log_prob = val_dataset.get_log_probs()
-    pred_samples_log_probs = bm.get_log_prob(pred_samples)
+    pred_samples_log_probs = test_dataset.get_log_probs()
 
     eval_data = EvalData(
         samples_true=true_samples,
