@@ -22,7 +22,6 @@ from boltzkit.utils.pdf import PdfBuffer, pdf_to_wandb_image
 
 from boltzkit.utils.shape_utils import squeeze_last_dim
 
-
 ValueType = float | int | PdfBuffer | Histogram1D | Histogram2D | Any
 
 
@@ -376,14 +375,16 @@ def run_eval(
 
     all_metrics = {}
 
+    print(f"Start evaluation with {len(eval_list)} nodes...")
     for i, (eval, prefix) in enumerate(eval_list):
+        print(f"Run eval node {i} ({eval.__class__.__name__})...")
         metrics = eval.eval(data, skip_on_missing_data=skip_on_missing_data)
         if metrics is None:
             continue
         metrics = _prefix_dict(metrics, prefix)
 
         update_dict_with_id(all_metrics, metrics, i)
-
+    print(f"Finished evaluation.")
     return all_metrics
 
 
