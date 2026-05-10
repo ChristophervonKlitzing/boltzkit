@@ -16,11 +16,14 @@ author = "Christopher von Klitzing"
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
 
+sys.path.append(".")  # For custom sphinx_extensions to be discoverable
+
 extensions = [
     "sphinx.ext.autodoc",
     "sphinx.ext.autosummary",
     "sphinx.ext.napoleon",
     "sphinx.ext.viewcode",
+    "sphinx_extensions.target_matrix",
 ]
 
 

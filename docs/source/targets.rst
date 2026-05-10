@@ -21,3 +21,4 @@ Available targets
 - :doc:`targets/gaussian_mixture`
 - :doc:`targets/lennard_jones`
 
+.. target-matrix::
